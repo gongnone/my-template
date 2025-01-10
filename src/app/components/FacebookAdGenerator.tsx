@@ -51,6 +51,13 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     selectedProduct.testimonials?.[0] || ''
   );
   const [generatedAd, setGeneratedAd] = useState('');
+  const [regularPrice, setRegularPrice] = useState('');
+  const [salePrice, setSalePrice] = useState('');
+  const [discountPercentage, setDiscountPercentage] = useState('');
+  const [offerDeadline, setOfferDeadline] = useState('');
+  const [bonusItems, setBonusItems] = useState('');
+  const [guarantee, setGuarantee] = useState('');
+  const [shipping, setShipping] = useState('');
 
   const { complete, completion, isLoading } = useCompletion({
     api: '/api/openai/chat',
@@ -95,7 +102,16 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
         Authority: ${credibleAuthority}
         Press Features: ${pressInfo}
         Reviews: ${numberOfReviews} reviews with ${averageStarRating} average rating
-        Example Review: ${fiveStarText}`;
+        Example Review: ${fiveStarText}
+        ${activeTab === 'conversion' ? `
+        Regular Price: ${regularPrice}
+        Sale Price: ${salePrice}
+        Discount: ${discountPercentage}%
+        Deadline: ${offerDeadline}
+        Bonuses: ${bonusItems}
+        Guarantee: ${guarantee}
+        Shipping: ${shipping}
+        ` : ''}`;
 
       const response = await complete(prompt);
       if (response) {
@@ -220,14 +236,29 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
               required
             >
               <option value="">Select A Style</option>
-              <option value="hero">Hero Ad</option>
-              <option value="weird_authority">Weird Authority Ad</option>
-              <option value="secret_info">A Secret Piece Of Information</option>
-              <option value="commitment">Commitment And Consistency</option>
-              <option value="ancient_story">Ancient Story And the Hidden Secret</option>
-              <option value="crush">Crush The Competition</option>
-              <option value="pas">Problem, Agitate, Solve</option>
-              <option value="timeline">Timeline</option>
+              {activeTab === 'lead-gen' ? (
+                <>
+                  <option value="hero">Hero Ad</option>
+                  <option value="weird_authority">Weird Authority Ad</option>
+                  <option value="secret_info">A Secret Piece Of Information</option>
+                  <option value="commitment">Commitment And Consistency</option>
+                  <option value="ancient_story">Ancient Story And the Hidden Secret</option>
+                  <option value="crush">Crush The Competition</option>
+                  <option value="pas">Problem, Agitate, Solve</option>
+                  <option value="timeline">Timeline</option>
+                </>
+              ) : (
+                <>
+                  <option value="social_proof">Social Proof & Testimonials</option>
+                  <option value="limited_time">Limited Time Offer</option>
+                  <option value="price_comparison">Price Comparison</option>
+                  <option value="before_after">Before & After Results</option>
+                  <option value="product_demo">Product Demo & Features</option>
+                  <option value="bundle_deal">Bundle Deal Offer</option>
+                  <option value="seasonal">Seasonal or Holiday Special</option>
+                  <option value="flash_sale">Flash Sale</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -242,9 +273,26 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
               required
             >
               <option value="">Select A Call To Action</option>
-              <option value="download_report">Download free report</option>
-              <option value="watch_video">Watch free video training</option>
-              <option value="book_call">Book a free 30-minute call</option>
+              {activeTab === 'lead-gen' ? (
+                <>
+                  <option value="download_report">Download free report</option>
+                  <option value="watch_video">Watch free video training</option>
+                  <option value="book_call">Book a free 30-minute call</option>
+                  <option value="free_trial">Start free trial</option>
+                  <option value="subscribe">Subscribe to newsletter</option>
+                </>
+              ) : (
+                <>
+                  <option value="shop_now">Shop Now</option>
+                  <option value="buy_now">Buy Now</option>
+                  <option value="get_offer">Get Offer</option>
+                  <option value="order_now">Order Now</option>
+                  <option value="learn_more">Learn More</option>
+                  <option value="add_to_cart">Add to Cart</option>
+                  <option value="claim_discount">Claim Discount</option>
+                  <option value="get_deal">Get Deal</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -305,6 +353,28 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
           </div>
           {renderFormField("Total number of reviews of ALL TIME", totalReviews, (e) => setTotalReviews(e.target.value))}
           {renderFormField("Five star text", fiveStarText, (e) => setFiveStarText(e.target.value))}
+
+          {/* Add Conversion-specific fields */}
+          {activeTab === 'conversion' && (
+            <>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {renderFormField("Regular Price*", regularPrice, (e) => setRegularPrice(e.target.value), "$XX.XX")}
+                {renderFormField("Sale Price*", salePrice, (e) => setSalePrice(e.target.value), "$XX.XX")}
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Offer Details</label>
+                <div className="space-y-4">
+                  {renderFormField("Discount Percentage", discountPercentage, (e) => setDiscountPercentage(e.target.value), "e.g., 50")}
+                  {renderFormField("Offer Deadline", offerDeadline, (e) => setOfferDeadline(e.target.value), "e.g., 24 hours only")}
+                  {renderFormField("Bonus Items", bonusItems, (e) => setBonusItems(e.target.value), "List any free bonuses included", true)}
+                </div>
+              </div>
+
+              {renderFormField("Money-back Guarantee", guarantee, (e) => setGuarantee(e.target.value), "e.g., 30-day money-back guarantee")}
+              {renderFormField("Shipping Information", shipping, (e) => setShipping(e.target.value), "e.g., Free shipping worldwide")}
+            </>
+          )}
 
           {/* Add the generated ad display */}
           {generatedAd && (
