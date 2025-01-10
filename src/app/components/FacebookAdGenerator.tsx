@@ -1,71 +1,116 @@
 'use client';
 
 import { Product } from '@/lib/types/product';
-import { useState, type ChangeEvent } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { useCompletion } from 'ai/react';
 
 interface FacebookAdGeneratorProps {
   product: Product;
+  products?: Product[];
   onBack: () => void;
 }
 
-export default function FacebookAdGenerator({ product, onBack }: FacebookAdGeneratorProps) {
+export default function FacebookAdGenerator({ product, products = [], onBack }: FacebookAdGeneratorProps) {
+  const [activeTab, setActiveTab] = useState<'lead-gen' | 'conversion'>('lead-gen');
+  const [selectedProduct, setSelectedProduct] = useState<Product>(product);
+  
   // Initialize state with product data
   const [adStyle, setAdStyle] = useState('');
   const [callToAction, setCallToAction] = useState('');
   
   // Product Information
-  const [targetMarket, setTargetMarket] = useState(product.targetMarket || '');
-  const [productCategory, setProductCategory] = useState(product.category || '');
-  const [specificFeatures, setSpecificFeatures] = useState(product.name || '');
-  const [painPoints, setPainPoints] = useState(product.painPoints || '');
-  const [benefits, setBenefits] = useState(product.uniqueSellingPoints || '');
-  const [productDescription, setProductDescription] = useState(product.description || '');
-  
-  // Story and Benefits
-  const [theStory, setTheStory] = useState(product.uniqueMechanism || ''); // Map unique mechanism to story
+  const [targetMarket, setTargetMarket] = useState(selectedProduct.targetMarket || '');
+  const [productCategory, setProductCategory] = useState(selectedProduct.category || '');
+  const [specificFeatures, setSpecificFeatures] = useState(selectedProduct.name || '');
+  const [painPoints, setPainPoints] = useState(selectedProduct.painPoints || '');
+  const [benefits, setBenefits] = useState(selectedProduct.uniqueSellingPoints || '');
+  const [productDescription, setProductDescription] = useState(selectedProduct.description || '');
+  const [theStory, setTheStory] = useState(selectedProduct.uniqueMechanism || '');
   const [listBenefits, setListBenefits] = useState(
-    product.productFeatures ? product.productFeatures.join('\n') : ''
+    selectedProduct.productFeatures ? selectedProduct.productFeatures.join('\n') : ''
   );
-  
-  // Technical Details
-  const [specificTerms, setSpecificTerms] = useState(product.methodology || '');
-  const [studiesAndResearch, setStudiesAndResearch] = useState(product.scientificStudies || '');
+  const [specificTerms, setSpecificTerms] = useState(selectedProduct.methodology || '');
+  const [studiesAndResearch, setStudiesAndResearch] = useState(selectedProduct.scientificStudies || '');
   const [credibleAuthority, setCredibleAuthority] = useState(
-    product.credibilityMarkers ? product.credibilityMarkers.join(', ') : ''
+    selectedProduct.credibilityMarkers ? selectedProduct.credibilityMarkers.join(', ') : ''
   );
-  
-  // Keywords and CMS
+  const [keywords, setKeywords] = useState('');
   const [showKeywords, setShowKeywords] = useState(false);
-  const [keywords, setKeywords] = useState(''); // New state for keywords input
   const [cmsPassword, setCmsPassword] = useState('');
-  
-  // Press and Price
-  const [pressInfo, setPressInfo] = useState(product.featuredInPress || '');
-  
-  // Review Statistics
+  const [pressInfo, setPressInfo] = useState(selectedProduct.featuredInPress || '');
   const [numberOfReviews, setNumberOfReviews] = useState(
-    product.statistics?.reviews?.toString() || ''
+    selectedProduct.statistics?.reviews?.toString() || ''
   );
   const [averageStarRating, setAverageStarRating] = useState(
-    product.statistics?.rating?.toString() || ''
+    selectedProduct.statistics?.rating?.toString() || ''
   );
   const [totalReviews, setTotalReviews] = useState(
-    product.statistics?.totalCustomers?.toString() || ''
+    selectedProduct.statistics?.totalCustomers?.toString() || ''
   );
   const [fiveStarText, setFiveStarText] = useState(
-    product.testimonials?.[0] || ''
+    selectedProduct.testimonials?.[0] || ''
   );
+  const [generatedAd, setGeneratedAd] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { complete, completion, isLoading } = useCompletion({
+    api: '/api/openai/chat',
+  });
+
+  // Update form when selected product changes
+  useEffect(() => {
+    setTargetMarket(selectedProduct.targetMarket || '');
+    setProductCategory(selectedProduct.category || '');
+    setSpecificFeatures(selectedProduct.name || '');
+    setPainPoints(selectedProduct.painPoints || '');
+    setBenefits(selectedProduct.uniqueSellingPoints || '');
+    setProductDescription(selectedProduct.description || '');
+    setTheStory(selectedProduct.uniqueMechanism || '');
+    setListBenefits(selectedProduct.productFeatures ? selectedProduct.productFeatures.join('\n') : '');
+    setSpecificTerms(selectedProduct.methodology || '');
+    setStudiesAndResearch(selectedProduct.scientificStudies || '');
+    setCredibleAuthority(selectedProduct.credibilityMarkers ? selectedProduct.credibilityMarkers.join(', ') : '');
+    setPressInfo(selectedProduct.featuredInPress || '');
+    setNumberOfReviews(selectedProduct.statistics?.reviews?.toString() || '');
+    setAverageStarRating(selectedProduct.statistics?.rating?.toString() || '');
+    setTotalReviews(selectedProduct.statistics?.totalCustomers?.toString() || '');
+    setFiveStarText(selectedProduct.testimonials?.[0] || '');
+  }, [selectedProduct]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
+    
+    try {
+      const prompt = `Create a Facebook ${activeTab === 'lead-gen' ? 'lead generation' : 'conversion'} ad with the following details:
+        Style: ${adStyle}
+        Call to Action: ${callToAction}
+        Target Market: ${targetMarket}
+        Product: ${specificFeatures}
+        Pain Points: ${painPoints}
+        Benefits: ${benefits}
+        Description: ${productDescription}
+        Story: ${theStory}
+        Key Benefits: ${listBenefits}
+        Technical Details: ${specificTerms}
+        Studies: ${studiesAndResearch}
+        Authority: ${credibleAuthority}
+        Press Features: ${pressInfo}
+        Reviews: ${numberOfReviews} reviews with ${averageStarRating} average rating
+        Example Review: ${fiveStarText}`;
+
+      const response = await complete(prompt);
+      if (response) {
+        setGeneratedAd(response);
+      }
+    } catch (error) {
+      console.error('Error generating ad:', error);
+    }
   };
 
   const renderFormField = (
-    label: string, 
-    value: string, 
-    onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void, 
-    placeholder: string = '', 
+    label: string,
+    value: string,
+    onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void,
+    placeholder: string = '',
     isTextArea: boolean = false
   ) => (
     <div className="mb-6">
@@ -98,16 +143,69 @@ export default function FacebookAdGenerator({ product, onBack }: FacebookAdGener
         <h2 className="text-xl font-semibold">Generate New Facebook Ad</h2>
       </div>
 
+      {/* Tab Buttons */}
+      <div className="flex justify-center w-full">
+        <div className="inline-flex p-1 bg-[#2A2B2F] rounded-lg">
+          <button
+            onClick={() => setActiveTab('lead-gen')}
+            className={`px-6 py-2.5 rounded-md font-medium text-sm transition-colors ${
+              activeTab === 'lead-gen'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Lead Generation
+          </button>
+          <button
+            onClick={() => setActiveTab('conversion')}
+            className={`px-6 py-2.5 rounded-md font-medium text-sm transition-colors ${
+              activeTab === 'conversion'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Conversion
+          </button>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-[#1F2023] rounded-xl p-6">
           {/* Product Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Product</label>
-            <div className="flex gap-2">
-              <div className="bg-[#2A2B2F] p-3 rounded-lg flex-grow">{product.name}</div>
-              <button type="button" className="bg-purple-600 px-4 rounded-lg">
-                Load from E-commerce
-              </button>
+            <label className="block text-sm font-medium mb-2">Product*</label>
+            <div className="relative">
+              <select
+                className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white appearance-none cursor-pointer"
+                value={selectedProduct?.id || ''}
+                onChange={(e) => {
+                  const newProduct = products.find(p => p.id === e.target.value);
+                  if (newProduct) setSelectedProduct(newProduct);
+                }}
+                required
+              >
+                {products.length === 0 ? (
+                  <option value="">No products available</option>
+                ) : (
+                  <>
+                    <option value="">Select a product</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                <svg 
+                  className="h-4 w-4 fill-current" 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                </svg>
+              </div>
             </div>
           </div>
 
@@ -208,13 +306,22 @@ export default function FacebookAdGenerator({ product, onBack }: FacebookAdGener
           {renderFormField("Total number of reviews of ALL TIME", totalReviews, (e) => setTotalReviews(e.target.value))}
           {renderFormField("Five star text", fiveStarText, (e) => setFiveStarText(e.target.value))}
 
+          {/* Add the generated ad display */}
+          {generatedAd && (
+            <div className="bg-[#2A2B2F] p-6 rounded-xl mt-6">
+              <h3 className="text-lg font-medium mb-4">Generated Facebook Ad</h3>
+              <div className="whitespace-pre-wrap">{generatedAd}</div>
+            </div>
+          )}
+
           {/* Form Actions */}
           <div className="flex gap-4 mt-6">
             <button
               type="submit"
-              className="flex-grow bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700"
+              className="flex-grow bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              disabled={isLoading}
             >
-              Create Facebook Ad
+              {isLoading ? 'Generating...' : 'Create Facebook Ad'}
             </button>
             <button
               type="button"

@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import SignInWithGoogle from '@/components/SignInWithGoogle';
+import FacebookAdGenerator from '@/app/components/FacebookAdGenerator';
 
 export default function Home() {
   const { user } = useAuth();
@@ -22,6 +23,11 @@ export default function Home() {
           Voice Notes App
         </h1>
         <SignInWithGoogle />
+        <FacebookAdGenerator 
+          product={initialProduct} 
+          products={products}
+          onBack={handleBack} 
+        />
       </div>
     </div>
   );

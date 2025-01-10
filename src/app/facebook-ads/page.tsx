@@ -80,6 +80,7 @@ export default function FacebookAdsPage() {
       <div className="h-full overflow-y-auto p-6">
         <FacebookAdGenerator 
           product={selectedProduct} 
+          products={products} 
           onBack={() => setSelectedProduct(null)} 
         />
       </div>
