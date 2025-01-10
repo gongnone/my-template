@@ -3,6 +3,7 @@
 import { Product } from '@/lib/types/product';
 import { useState, useEffect, type ChangeEvent } from 'react';
 import { useCompletion } from 'ai/react';
+import { useAdTemplates } from '@/lib/contexts/AdTemplatesContext';
 
 interface FacebookAdGeneratorProps {
   product: Product;
@@ -77,6 +78,8 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     },
   });
 
+  const { addTemplate, getExamplesForStyle } = useAdTemplates();
+
   // Update form when selected product changes
   useEffect(() => {
     setTargetMarket(selectedProduct.targetMarket || '');
@@ -101,6 +104,30 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     e.preventDefault();
     
     try {
+      let templateExamples = '';
+      try {
+        const styleExamples = getExamplesForStyle?.(adStyle, activeTab);
+        if (styleExamples?.examples.length) {
+          templateExamples = `
+Here are examples of successful ads in this style:
+${styleExamples.examples.map((example, i) => `
+Example ${i + 1}:
+Primary Text:
+${example.primaryText}
+
+Headline:
+${example.headline}
+
+Description:
+${example.description}
+`).join('\n')}
+
+Please use these examples as inspiration for tone and structure while creating a unique ad that matches this style.`;
+        }
+      } catch (error) {
+        console.log('No templates available for this style');
+      }
+
       const prompt = `You are an expert Facebook ad copywriter. Create a Facebook ${activeTab === 'lead-gen' ? 'lead generation' : 'conversion'} ad with these details:
 
 Style: ${adStyle}
@@ -127,6 +154,8 @@ Bonuses: ${bonusItems}
 Guarantee: ${guarantee}
 Shipping: ${shipping}
 ` : ''}
+
+${templateExamples}
 
 Format your response exactly like this:
 1. Primary Text (2000 chars max):
@@ -210,8 +239,41 @@ Format your response exactly like this:
   };
 
   const GeneratedView = () => {
-    // Helper function to safely get text length
+    const [activeViewTab, setActiveViewTab] = useState<'ad-copy' | 'body-copy' | 'link-desc'>('ad-copy');
+    const [editedOutputs, setEditedOutputs] = useState(adOutputs);
+    
     const getTextLength = (text: string | undefined) => text?.length || 0;
+
+    const handleTextChange = (
+      field: 'primaryText' | 'headline' | 'description',
+      value: string
+    ) => {
+      setEditedOutputs(prev => prev ? {
+        ...prev,
+        [field]: value
+      } : null);
+    };
+
+    const handleSaveToCreatives = async () => {
+      if (!editedOutputs) return;
+      
+      try {
+        await addTemplate({
+          style: adStyle,
+          type: activeTab,
+          primaryText: editedOutputs.primaryText,
+          headline: editedOutputs.headline,
+          description: editedOutputs.description,
+          industry: productCategory,
+          tags: keywords.split(',').map(t => t.trim()),
+        });
+        
+        alert('Saved to Ad Creatives successfully!');
+      } catch (error) {
+        console.error('Error saving to ad creatives:', error);
+        alert('Error saving to ad creatives. Please try again.');
+      }
+    };
 
     return (
       <div className="space-y-6">
@@ -231,79 +293,141 @@ Format your response exactly like this:
             >
               Regenerate
             </button>
+            <button
+              onClick={handleSaveToCreatives}
+              className="px-4 py-2 bg-green-600 rounded-lg text-sm hover:bg-green-700 transition-colors"
+            >
+              Save to Ad Creatives
+            </button>
+          </div>
+        </div>
+
+        {/* View Tabs */}
+        <div className="flex justify-center w-full mb-6">
+          <div className="inline-flex p-1 bg-[#2A2B2F] rounded-lg">
+            <button
+              onClick={() => setActiveViewTab('ad-copy')}
+              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                activeViewTab === 'ad-copy'
+                  ? 'bg-purple-600 text-white shadow-sm scale-105'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Ad Headlines
+            </button>
+            <button
+              onClick={() => setActiveViewTab('body-copy')}
+              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                activeViewTab === 'body-copy'
+                  ? 'bg-purple-600 text-white shadow-sm scale-105'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Body Copy
+            </button>
+            <button
+              onClick={() => setActiveViewTab('link-desc')}
+              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                activeViewTab === 'link-desc'
+                  ? 'bg-purple-600 text-white shadow-sm scale-105'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Link Descriptions
+            </button>
           </div>
         </div>
 
         <div className="bg-[#1F2023] rounded-xl p-6">
           <div className="space-y-8">
-            {/* Primary Text Section */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-medium">Primary Text</h3>
-                <div className="flex items-center gap-4">
-                  <span className={`text-sm ${
-                    getTextLength(adOutputs?.primaryText) > 2000 ? 'text-red-500' : 'text-gray-400'
-                  }`}>
-                    {getTextLength(adOutputs?.primaryText)}/2000
-                  </span>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(adOutputs?.primaryText || '')}
-                    className="text-sm text-gray-400 hover:text-white"
-                  >
-                    Copy
-                  </button>
+            {activeViewTab === 'ad-copy' && (
+              <>
+                {/* Primary Text Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-medium">Primary Text</h3>
+                    <div className="flex items-center gap-4">
+                      <span className={`text-sm ${
+                        getTextLength(editedOutputs?.primaryText) > 2000 ? 'text-red-500' : 'text-gray-400'
+                      }`}>
+                        {getTextLength(editedOutputs?.primaryText)}/2000
+                      </span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(editedOutputs?.primaryText || '')}
+                        className="text-sm text-gray-400 hover:text-white"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    className="w-full bg-[#2A2B2F] p-4 rounded-lg whitespace-pre-wrap text-white min-h-[200px] resize-y"
+                    value={editedOutputs?.primaryText || ''}
+                    onChange={(e) => handleTextChange('primaryText', e.target.value)}
+                  />
                 </div>
-              </div>
-              <div className="bg-[#2A2B2F] p-4 rounded-lg whitespace-pre-wrap">
-                {adOutputs?.primaryText}
-              </div>
-            </div>
+              </>
+            )}
 
-            {/* Headline Section */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-medium">Headline</h3>
-                <div className="flex items-center gap-4">
-                  <span className={`text-sm ${
-                    getTextLength(adOutputs?.headline) > 255 ? 'text-red-500' : 'text-gray-400'
-                  }`}>
-                    {getTextLength(adOutputs?.headline)}/255
-                  </span>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(adOutputs?.headline || '')}
-                    className="text-sm text-gray-400 hover:text-white"
-                  >
-                    Copy
-                  </button>
+            {activeViewTab === 'body-copy' && (
+              <>
+                {/* Headline Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-medium">Headline</h3>
+                    <div className="flex items-center gap-4">
+                      <span className={`text-sm ${
+                        getTextLength(editedOutputs?.headline) > 255 ? 'text-red-500' : 'text-gray-400'
+                      }`}>
+                        {getTextLength(editedOutputs?.headline)}/255
+                      </span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(editedOutputs?.headline || '')}
+                        className="text-sm text-gray-400 hover:text-white"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    className="w-full bg-[#2A2B2F] p-4 rounded-lg text-white resize-none"
+                    value={editedOutputs?.headline || ''}
+                    onChange={(e) => handleTextChange('headline', e.target.value)}
+                    rows={2}
+                  />
                 </div>
-              </div>
-              <div className="bg-[#2A2B2F] p-4 rounded-lg">
-                {adOutputs?.headline}
-              </div>
-            </div>
+              </>
+            )}
 
-            {/* Description Section */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-medium">Description</h3>
-                <div className="flex items-center gap-4">
-                  <span className={`text-sm ${
-                    getTextLength(adOutputs?.description) > 150 ? 'text-red-500' : 'text-gray-400'
-                  }`}>
-                    {getTextLength(adOutputs?.description)}/150
-                  </span>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(adOutputs?.description || '')}
-                    className="text-sm text-gray-400 hover:text-white"
-                  >
-                    Copy
-                  </button>
+            {activeViewTab === 'link-desc' && (
+              <>
+                {/* Description Section */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-medium">Description</h3>
+                    <div className="flex items-center gap-4">
+                      <span className={`text-sm ${
+                        getTextLength(editedOutputs?.description) > 150 ? 'text-red-500' : 'text-gray-400'
+                      }`}>
+                        {getTextLength(editedOutputs?.description)}/150
+                      </span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(editedOutputs?.description || '')}
+                        className="text-sm text-gray-400 hover:text-white"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    className="w-full bg-[#2A2B2F] p-4 rounded-lg text-white resize-none"
+                    value={editedOutputs?.description || ''}
+                    onChange={(e) => handleTextChange('description', e.target.value)}
+                    rows={2}
+                  />
                 </div>
-              </div>
-              <div className="bg-[#2A2B2F] p-4 rounded-lg">
-                {adOutputs?.description}
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>
