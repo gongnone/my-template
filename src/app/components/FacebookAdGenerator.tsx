@@ -58,9 +58,23 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
   const [bonusItems, setBonusItems] = useState('');
   const [guarantee, setGuarantee] = useState('');
   const [shipping, setShipping] = useState('');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [adOutputs, setAdOutputs] = useState<{
+    primaryText: string;
+    headline: string;
+    description: string;
+  } | null>(null);
+  const [showGeneratedView, setShowGeneratedView] = useState(false);
 
   const { complete, completion, isLoading } = useCompletion({
     api: '/api/openai/chat',
+    onError: (error) => {
+      console.error('Completion error:', error);
+      alert('Error generating ad. Please try again.');
+    },
+    onFinish: () => {
+      // Handle completion if needed
+    },
   });
 
   // Update form when selected product changes
@@ -87,38 +101,74 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     e.preventDefault();
     
     try {
-      const prompt = `Create a Facebook ${activeTab === 'lead-gen' ? 'lead generation' : 'conversion'} ad with the following details:
-        Style: ${adStyle}
-        Call to Action: ${callToAction}
-        Target Market: ${targetMarket}
-        Product: ${specificFeatures}
-        Pain Points: ${painPoints}
-        Benefits: ${benefits}
-        Description: ${productDescription}
-        Story: ${theStory}
-        Key Benefits: ${listBenefits}
-        Technical Details: ${specificTerms}
-        Studies: ${studiesAndResearch}
-        Authority: ${credibleAuthority}
-        Press Features: ${pressInfo}
-        Reviews: ${numberOfReviews} reviews with ${averageStarRating} average rating
-        Example Review: ${fiveStarText}
-        ${activeTab === 'conversion' ? `
-        Regular Price: ${regularPrice}
-        Sale Price: ${salePrice}
-        Discount: ${discountPercentage}%
-        Deadline: ${offerDeadline}
-        Bonuses: ${bonusItems}
-        Guarantee: ${guarantee}
-        Shipping: ${shipping}
-        ` : ''}`;
+      const prompt = `You are an expert Facebook ad copywriter. Create a Facebook ${activeTab === 'lead-gen' ? 'lead generation' : 'conversion'} ad with these details:
+
+Style: ${adStyle}
+Call to Action: ${callToAction}
+Target Market: ${targetMarket}
+Product: ${specificFeatures}
+Pain Points: ${painPoints}
+Benefits: ${benefits}
+Description: ${productDescription}
+Story: ${theStory}
+Key Benefits: ${listBenefits}
+Technical Details: ${specificTerms}
+Studies: ${studiesAndResearch}
+Authority: ${credibleAuthority}
+Press Features: ${pressInfo}
+Reviews: ${numberOfReviews} reviews with ${averageStarRating} average rating
+Example Review: ${fiveStarText}
+${activeTab === 'conversion' ? `
+Regular Price: ${regularPrice}
+Sale Price: ${salePrice}
+Discount: ${discountPercentage}%
+Deadline: ${offerDeadline}
+Bonuses: ${bonusItems}
+Guarantee: ${guarantee}
+Shipping: ${shipping}
+` : ''}
+
+Format your response exactly like this:
+1. Primary Text (2000 chars max):
+[Write compelling ad copy here]
+
+2. Headline (255 chars max):
+[Write attention-grabbing headline here]
+
+3. Description (150 chars max):
+[Write concise description here]`;
 
       const response = await complete(prompt);
+      
       if (response) {
-        setGeneratedAd(response);
+        console.log('API Response:', response); // Debug log
+        
+        try {
+          const sections = response.split(/\d\.\s+/);
+          if (sections.length >= 4) {
+            const [_, primaryText, headline, description] = sections;
+            
+            setAdOutputs({
+              primaryText: primaryText.replace('Primary Text (2000 chars max):', '').trim(),
+              headline: headline.replace('Headline (255 chars max):', '').trim(),
+              description: description.replace('Description (150 chars max):', '').trim(),
+            });
+            setShowGeneratedView(true);
+          } else {
+            console.error('Invalid response format:', response);
+            alert('Error: Invalid response format from AI. Please try again.');
+          }
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError);
+          alert('Error parsing the generated content. Please try again.');
+        }
+      } else {
+        console.error('No response from API');
+        alert('No response received. Please try again.');
       }
     } catch (error) {
       console.error('Error generating ad:', error);
+      alert('Error generating ad. Please try again.');
     }
   };
 
@@ -150,259 +200,371 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     </div>
   );
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="text-gray-400 hover:text-white">
-          ← Back
-        </button>
-        <h2 className="text-xl font-semibold">Generate New Facebook Ad</h2>
-      </div>
+  const handleTabChange = (tab: 'lead-gen' | 'conversion') => {
+    if (tab !== activeTab) {
+      setIsTransitioning(true);
+      setActiveTab(tab);
+      // Reset transition state after animation completes
+      setTimeout(() => setIsTransitioning(false), 300);
+    }
+  };
 
-      {/* Tab Buttons */}
-      <div className="flex justify-center w-full">
-        <div className="inline-flex p-1 bg-[#2A2B2F] rounded-lg">
-          <button
-            onClick={() => setActiveTab('lead-gen')}
-            className={`px-6 py-2.5 rounded-md font-medium text-sm transition-colors ${
-              activeTab === 'lead-gen'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Lead Generation
-          </button>
-          <button
-            onClick={() => setActiveTab('conversion')}
-            className={`px-6 py-2.5 rounded-md font-medium text-sm transition-colors ${
-              activeTab === 'conversion'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Conversion
-          </button>
-        </div>
-      </div>
+  const GeneratedView = () => {
+    // Helper function to safely get text length
+    const getTextLength = (text: string | undefined) => text?.length || 0;
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-[#1F2023] rounded-xl p-6">
-          {/* Product Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Product*</label>
-            <div className="relative">
-              <select
-                className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white appearance-none cursor-pointer"
-                value={selectedProduct?.id || ''}
-                onChange={(e) => {
-                  const newProduct = products.find(p => p.id === e.target.value);
-                  if (newProduct) setSelectedProduct(newProduct);
-                }}
-                required
-              >
-                {products.length === 0 ? (
-                  <option value="">No products available</option>
-                ) : (
-                  <>
-                    <option value="">Select a product</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
-                <svg 
-                  className="h-4 w-4 fill-current" 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Ad Style */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Ad Style*</label>
-            <p className="text-gray-400 text-sm mb-2">Please select what style of ad you'd like.</p>
-            <select 
-              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
-              value={adStyle}
-              onChange={(e) => setAdStyle(e.target.value)}
-              required
-            >
-              <option value="">Select A Style</option>
-              {activeTab === 'lead-gen' ? (
-                <>
-                  <option value="hero">Hero Ad</option>
-                  <option value="weird_authority">Weird Authority Ad</option>
-                  <option value="secret_info">A Secret Piece Of Information</option>
-                  <option value="commitment">Commitment And Consistency</option>
-                  <option value="ancient_story">Ancient Story And the Hidden Secret</option>
-                  <option value="crush">Crush The Competition</option>
-                  <option value="pas">Problem, Agitate, Solve</option>
-                  <option value="timeline">Timeline</option>
-                </>
-              ) : (
-                <>
-                  <option value="social_proof">Social Proof & Testimonials</option>
-                  <option value="limited_time">Limited Time Offer</option>
-                  <option value="price_comparison">Price Comparison</option>
-                  <option value="before_after">Before & After Results</option>
-                  <option value="product_demo">Product Demo & Features</option>
-                  <option value="bundle_deal">Bundle Deal Offer</option>
-                  <option value="seasonal">Seasonal or Holiday Special</option>
-                  <option value="flash_sale">Flash Sale</option>
-                </>
-              )}
-            </select>
-          </div>
-
-          {/* Call To Action */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Ad Call To Action*</label>
-            <p className="text-gray-400 text-sm mb-2">Please select your primary call to action.</p>
-            <select 
-              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
-              value={callToAction}
-              onChange={(e) => setCallToAction(e.target.value)}
-              required
-            >
-              <option value="">Select A Call To Action</option>
-              {activeTab === 'lead-gen' ? (
-                <>
-                  <option value="download_report">Download free report</option>
-                  <option value="watch_video">Watch free video training</option>
-                  <option value="book_call">Book a free 30-minute call</option>
-                  <option value="free_trial">Start free trial</option>
-                  <option value="subscribe">Subscribe to newsletter</option>
-                </>
-              ) : (
-                <>
-                  <option value="shop_now">Shop Now</option>
-                  <option value="buy_now">Buy Now</option>
-                  <option value="get_offer">Get Offer</option>
-                  <option value="order_now">Order Now</option>
-                  <option value="learn_more">Learn More</option>
-                  <option value="add_to_cart">Add to Cart</option>
-                  <option value="claim_discount">Claim Discount</option>
-                  <option value="get_deal">Get Deal</option>
-                </>
-              )}
-            </select>
-          </div>
-
-          {/* All Form Fields */}
-          {renderFormField("Target Market*", targetMarket, (e) => setTargetMarket(e.target.value), "e.g. Women who like...")}
-          {renderFormField("Product Category*", productCategory, (e) => setProductCategory(e.target.value), "e.g. Cosmetics")}
-          {renderFormField("Specific Product Name*", specificFeatures, (e) => setSpecificFeatures(e.target.value), "The name of the product/service/brand...")}
-          {renderFormField("Pain/Problem*", painPoints, (e) => setPainPoints(e.target.value), "e.g. Struggling with...", true)}
-          {renderFormField("Benefits*", benefits, (e) => setBenefits(e.target.value), "e.g. Helps you...", true)}
-          {renderFormField("Product Description*", productDescription, (e) => setProductDescription(e.target.value), "", true)}
-          {renderFormField("The Story", theStory, (e) => setTheStory(e.target.value), "", true)}
-          {renderFormField("List Benefits (one line at a time)*", listBenefits, (e) => setListBenefits(e.target.value), "e.g. 1...\n2...", true)}
-          {renderFormField("Specific terms/ingredients/specifications/methodology*", specificTerms, (e) => setSpecificTerms(e.target.value), "", true)}
-          {renderFormField("Studies and Research", studiesAndResearch, (e) => setStudiesAndResearch(e.target.value), "e.g. New Stanford Study shows...")}
-          
-          {/* Credible Authority Section */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Credible Authority Figure</label>
-            <div className="space-y-4">
-              <input
-                type="text"
-                className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
-                value={credibleAuthority}
-                onChange={(e) => setCredibleAuthority(e.target.value)}
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="bg-[#2A2B2F] p-2 rounded-lg"
-                  onClick={() => setShowKeywords(!showKeywords)}
-                >
-                  {showKeywords ? '-' : '+'}
-                </button>
-                <span className="text-sm text-gray-400">Show keywords</span>
-              </div>
-              {showKeywords && (
-                <div className="bg-[#2A2B2F] p-3 rounded-lg">
-                  <input
-                    type="text"
-                    className="w-full bg-transparent text-white"
-                    value={keywords}
-                    onChange={(e) => setKeywords(e.target.value)}
-                    placeholder="Enter keywords"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Additional Fields */}
-          {renderFormField("CMS password", cmsPassword, (e) => setCmsPassword(e.target.value))}
-          {renderFormField("Featured in Press", pressInfo, (e) => setPressInfo(e.target.value), "e.g. WSJ, CNN, Forbes & Yahoo")}
-
-          {/* Review Information */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            {renderFormField("Number of reviews", numberOfReviews, (e) => setNumberOfReviews(e.target.value))}
-            {renderFormField("Average stars rating", averageStarRating, (e) => setAverageStarRating(e.target.value))}
-          </div>
-          {renderFormField("Total number of reviews of ALL TIME", totalReviews, (e) => setTotalReviews(e.target.value))}
-          {renderFormField("Five star text", fiveStarText, (e) => setFiveStarText(e.target.value))}
-
-          {/* Add Conversion-specific fields */}
-          {activeTab === 'conversion' && (
-            <>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {renderFormField("Regular Price*", regularPrice, (e) => setRegularPrice(e.target.value), "$XX.XX")}
-                {renderFormField("Sale Price*", salePrice, (e) => setSalePrice(e.target.value), "$XX.XX")}
-              </div>
-              
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">Offer Details</label>
-                <div className="space-y-4">
-                  {renderFormField("Discount Percentage", discountPercentage, (e) => setDiscountPercentage(e.target.value), "e.g., 50")}
-                  {renderFormField("Offer Deadline", offerDeadline, (e) => setOfferDeadline(e.target.value), "e.g., 24 hours only")}
-                  {renderFormField("Bonus Items", bonusItems, (e) => setBonusItems(e.target.value), "List any free bonuses included", true)}
-                </div>
-              </div>
-
-              {renderFormField("Money-back Guarantee", guarantee, (e) => setGuarantee(e.target.value), "e.g., 30-day money-back guarantee")}
-              {renderFormField("Shipping Information", shipping, (e) => setShipping(e.target.value), "e.g., Free shipping worldwide")}
-            </>
-          )}
-
-          {/* Add the generated ad display */}
-          {generatedAd && (
-            <div className="bg-[#2A2B2F] p-6 rounded-xl mt-6">
-              <h3 className="text-lg font-medium mb-4">Generated Facebook Ad</h3>
-              <div className="whitespace-pre-wrap">{generatedAd}</div>
-            </div>
-          )}
-
-          {/* Form Actions */}
-          <div className="flex gap-4 mt-6">
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold">Generated Facebook Ad</h2>
+          <div className="flex gap-2">
             <button
-              type="submit"
-              className="flex-grow bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              onClick={() => setShowGeneratedView(false)}
+              className="px-4 py-2 bg-[#2A2B2F] rounded-lg text-sm hover:bg-[#3A3B3F] transition-colors"
+            >
+              Edit Inputs
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-4 py-2 bg-purple-600 rounded-lg text-sm hover:bg-purple-700 transition-colors"
               disabled={isLoading}
             >
-              {isLoading ? 'Generating...' : 'Create Facebook Ad'}
-            </button>
-            <button
-              type="button"
-              className="px-6 py-3 bg-[#2A2B2F] rounded-lg hover:bg-[#3A3B3F]"
-              onClick={onBack}
-            >
-              Cancel
+              Regenerate
             </button>
           </div>
         </div>
-      </form>
+
+        <div className="bg-[#1F2023] rounded-xl p-6">
+          <div className="space-y-8">
+            {/* Primary Text Section */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-medium">Primary Text</h3>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${
+                    getTextLength(adOutputs?.primaryText) > 2000 ? 'text-red-500' : 'text-gray-400'
+                  }`}>
+                    {getTextLength(adOutputs?.primaryText)}/2000
+                  </span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(adOutputs?.primaryText || '')}
+                    className="text-sm text-gray-400 hover:text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div className="bg-[#2A2B2F] p-4 rounded-lg whitespace-pre-wrap">
+                {adOutputs?.primaryText}
+              </div>
+            </div>
+
+            {/* Headline Section */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-medium">Headline</h3>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${
+                    getTextLength(adOutputs?.headline) > 255 ? 'text-red-500' : 'text-gray-400'
+                  }`}>
+                    {getTextLength(adOutputs?.headline)}/255
+                  </span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(adOutputs?.headline || '')}
+                    className="text-sm text-gray-400 hover:text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div className="bg-[#2A2B2F] p-4 rounded-lg">
+                {adOutputs?.headline}
+              </div>
+            </div>
+
+            {/* Description Section */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-medium">Description</h3>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${
+                    getTextLength(adOutputs?.description) > 150 ? 'text-red-500' : 'text-gray-400'
+                  }`}>
+                    {getTextLength(adOutputs?.description)}/150
+                  </span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(adOutputs?.description || '')}
+                    className="text-sm text-gray-400 hover:text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div className="bg-[#2A2B2F] p-4 rounded-lg">
+                {adOutputs?.description}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {showGeneratedView ? (
+        <GeneratedView />
+      ) : (
+        <>
+          <div className="flex items-center gap-4 mb-6">
+            <button onClick={onBack} className="text-gray-400 hover:text-white">
+              ← Back
+            </button>
+            <h2 className="text-xl font-semibold">Generate New Facebook Ad</h2>
+          </div>
+
+          {/* Tab Buttons */}
+          <div className="flex justify-center w-full">
+            <div className="inline-flex p-1 bg-[#2A2B2F] rounded-lg">
+              <button
+                onClick={() => handleTabChange('lead-gen')}
+                className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                  activeTab === 'lead-gen'
+                    ? 'bg-purple-600 text-white shadow-sm scale-105'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Lead Generation
+              </button>
+              <button
+                onClick={() => handleTabChange('conversion')}
+                className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                  activeTab === 'conversion'
+                    ? 'bg-purple-600 text-white shadow-sm scale-105'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Conversion
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div 
+              className={`bg-[#1F2023] rounded-xl p-6 transition-all duration-300 ${
+                isTransitioning ? 'opacity-50 scale-[0.99] blur-[1px]' : 'opacity-100 scale-100 blur-0'
+              }`}
+            >
+              {/* Product Selection */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Product*</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white appearance-none cursor-pointer"
+                    value={selectedProduct?.id || ''}
+                    onChange={(e) => {
+                      const newProduct = products.find(p => p.id === e.target.value);
+                      if (newProduct) setSelectedProduct(newProduct);
+                    }}
+                    required
+                  >
+                    {products.length === 0 ? (
+                      <option value="">No products available</option>
+                    ) : (
+                      <>
+                        <option value="">Select a product</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
+                    <svg 
+                      className="h-4 w-4 fill-current" 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ad Style */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Ad Style*</label>
+                <p className="text-gray-400 text-sm mb-2">Please select what style of ad you'd like.</p>
+                <select 
+                  className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+                  value={adStyle}
+                  onChange={(e) => setAdStyle(e.target.value)}
+                  required
+                >
+                  <option value="">Select A Style</option>
+                  {activeTab === 'lead-gen' ? (
+                    <>
+                      <option value="hero">Hero Ad</option>
+                      <option value="weird_authority">Weird Authority Ad</option>
+                      <option value="secret_info">A Secret Piece Of Information</option>
+                      <option value="commitment">Commitment And Consistency</option>
+                      <option value="ancient_story">Ancient Story And the Hidden Secret</option>
+                      <option value="crush">Crush The Competition</option>
+                      <option value="pas">Problem, Agitate, Solve</option>
+                      <option value="timeline">Timeline</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="social_proof">Social Proof & Testimonials</option>
+                      <option value="limited_time">Limited Time Offer</option>
+                      <option value="price_comparison">Price Comparison</option>
+                      <option value="before_after">Before & After Results</option>
+                      <option value="product_demo">Product Demo & Features</option>
+                      <option value="bundle_deal">Bundle Deal Offer</option>
+                      <option value="seasonal">Seasonal or Holiday Special</option>
+                      <option value="flash_sale">Flash Sale</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Call To Action */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Ad Call To Action*</label>
+                <p className="text-gray-400 text-sm mb-2">Please select your primary call to action.</p>
+                <select 
+                  className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+                  value={callToAction}
+                  onChange={(e) => setCallToAction(e.target.value)}
+                  required
+                >
+                  <option value="">Select A Call To Action</option>
+                  {activeTab === 'lead-gen' ? (
+                    <>
+                      <option value="download_report">Download free report</option>
+                      <option value="watch_video">Watch free video training</option>
+                      <option value="book_call">Book a free 30-minute call</option>
+                      <option value="free_trial">Start free trial</option>
+                      <option value="subscribe">Subscribe to newsletter</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="shop_now">Shop Now</option>
+                      <option value="buy_now">Buy Now</option>
+                      <option value="get_offer">Get Offer</option>
+                      <option value="order_now">Order Now</option>
+                      <option value="learn_more">Learn More</option>
+                      <option value="add_to_cart">Add to Cart</option>
+                      <option value="claim_discount">Claim Discount</option>
+                      <option value="get_deal">Get Deal</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* All Form Fields */}
+              {renderFormField("Target Market*", targetMarket, (e) => setTargetMarket(e.target.value), "e.g. Women who like...")}
+              {renderFormField("Product Category*", productCategory, (e) => setProductCategory(e.target.value), "e.g. Cosmetics")}
+              {renderFormField("Specific Product Name*", specificFeatures, (e) => setSpecificFeatures(e.target.value), "The name of the product/service/brand...")}
+              {renderFormField("Pain/Problem*", painPoints, (e) => setPainPoints(e.target.value), "e.g. Struggling with...", true)}
+              {renderFormField("Benefits*", benefits, (e) => setBenefits(e.target.value), "e.g. Helps you...", true)}
+              {renderFormField("Product Description*", productDescription, (e) => setProductDescription(e.target.value), "", true)}
+              {renderFormField("The Story", theStory, (e) => setTheStory(e.target.value), "", true)}
+              {renderFormField("List Benefits (one line at a time)*", listBenefits, (e) => setListBenefits(e.target.value), "e.g. 1...\n2...", true)}
+              {renderFormField("Specific terms/ingredients/specifications/methodology*", specificTerms, (e) => setSpecificTerms(e.target.value), "", true)}
+              {renderFormField("Studies and Research", studiesAndResearch, (e) => setStudiesAndResearch(e.target.value), "e.g. New Stanford Study shows...")}
+              
+              {/* Credible Authority Section */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Credible Authority Figure</label>
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+                    value={credibleAuthority}
+                    onChange={(e) => setCredibleAuthority(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="bg-[#2A2B2F] p-2 rounded-lg"
+                      onClick={() => setShowKeywords(!showKeywords)}
+                    >
+                      {showKeywords ? '-' : '+'}
+                    </button>
+                    <span className="text-sm text-gray-400">Show keywords</span>
+                  </div>
+                  {showKeywords && (
+                    <div className="bg-[#2A2B2F] p-3 rounded-lg">
+                      <input
+                        type="text"
+                        className="w-full bg-transparent text-white"
+                        value={keywords}
+                        onChange={(e) => setKeywords(e.target.value)}
+                        placeholder="Enter keywords"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Fields */}
+              {renderFormField("CMS password", cmsPassword, (e) => setCmsPassword(e.target.value))}
+              {renderFormField("Featured in Press", pressInfo, (e) => setPressInfo(e.target.value), "e.g. WSJ, CNN, Forbes & Yahoo")}
+
+              {/* Review Information */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {renderFormField("Number of reviews", numberOfReviews, (e) => setNumberOfReviews(e.target.value))}
+                {renderFormField("Average stars rating", averageStarRating, (e) => setAverageStarRating(e.target.value))}
+              </div>
+              {renderFormField("Total number of reviews of ALL TIME", totalReviews, (e) => setTotalReviews(e.target.value))}
+              {renderFormField("Five star text", fiveStarText, (e) => setFiveStarText(e.target.value))}
+
+              {/* Add Conversion-specific fields */}
+              {activeTab === 'conversion' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {renderFormField("Regular Price*", regularPrice, (e) => setRegularPrice(e.target.value), "$XX.XX")}
+                    {renderFormField("Sale Price*", salePrice, (e) => setSalePrice(e.target.value), "$XX.XX")}
+                  </div>
+                  
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium mb-2">Offer Details</label>
+                    <div className="space-y-4">
+                      {renderFormField("Discount Percentage", discountPercentage, (e) => setDiscountPercentage(e.target.value), "e.g., 50")}
+                      {renderFormField("Offer Deadline", offerDeadline, (e) => setOfferDeadline(e.target.value), "e.g., 24 hours only")}
+                      {renderFormField("Bonus Items", bonusItems, (e) => setBonusItems(e.target.value), "List any free bonuses included", true)}
+                    </div>
+                  </div>
+
+                  {renderFormField("Money-back Guarantee", guarantee, (e) => setGuarantee(e.target.value), "e.g., 30-day money-back guarantee")}
+                  {renderFormField("Shipping Information", shipping, (e) => setShipping(e.target.value), "e.g., Free shipping worldwide")}
+                </>
+              )}
+
+              {/* Form Actions */}
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="submit"
+                  className="flex-grow bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Generating...' : 'Create Facebook Ad'}
+                </button>
+                <button
+                  type="button"
+                  className="px-6 py-3 bg-[#2A2B2F] rounded-lg hover:bg-[#3A3B3F]"
+                  onClick={onBack}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        </>
+      )}
     </div>
   );
 } 
