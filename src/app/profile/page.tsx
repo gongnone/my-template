@@ -5,9 +5,10 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
+import { logoutUser } from '@/lib/firebase/firebaseUtils';
 
 export default function ProfilePage() {
-  const { user, logoutUser } = useAuth();
+  const { user } = useAuth();
   const { status: subscriptionStatus, planType } = useSubscription();
   const router = useRouter();
 
@@ -16,6 +17,15 @@ export default function ProfilePage() {
       router.push('/');
     }
   }, [user, router]);
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      router.push('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   if (!user) return null;
 
@@ -95,7 +105,7 @@ export default function ProfilePage() {
           {/* Actions */}
           <div className="pt-4 border-t">
             <button
-              onClick={logoutUser}
+              onClick={handleLogout}
               className="text-red-600 hover:text-red-700 font-medium"
             >
               Sign Out

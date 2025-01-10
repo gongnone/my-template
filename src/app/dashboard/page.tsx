@@ -2,10 +2,9 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useSubscription } from '@/lib/hooks/useSubscription';
-import VoiceNotes from '@/app/components/VoiceNotes';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import DashboardLayout from '@/app/components/DashboardLayout';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -21,40 +20,37 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-            <div className="flex items-center gap-4">
-              {subscriptionStatus === 'active' ? (
-                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
-                  {planType} Plan
-                </span>
-              ) : (
-                <Link
-                  href="/pricing"
-                  className="px-4 py-2 text-sm text-white bg-purple-600 hover:bg-purple-700
-                    rounded-lg transition-colors"
-                >
-                  Upgrade Account
-                </Link>
-              )}
-              <Link
-                href="/profile"
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800
-                  border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Profile
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
+    <DashboardLayout>
+      <div className="flex items-center space-x-4 mb-8">
+        <button className="bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20">
+          View Favourite Headlines
+        </button>
+        <button className="bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700">
+          Create New Ad
+        </button>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <VoiceNotes />
-      </main>
-    </div>
+      <h1 className="text-3xl font-bold mb-2">Welcome to Your Dashboard</h1>
+      <p className="text-gray-400 mb-8">Select a tool from the sidebar to get started.</p>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* Quick Access Cards */}
+        <div className="bg-[#1F2023] rounded-xl p-6 hover:bg-[#1F2023]/80 transition cursor-pointer">
+          <div className="flex items-center space-x-3 mb-4">
+            <span className="text-2xl">📝</span>
+            <h3 className="text-xl font-semibold">Recent Headlines</h3>
+          </div>
+          <p className="text-gray-400">View and edit your recently generated headlines</p>
+        </div>
+
+        <div className="bg-[#1F2023] rounded-xl p-6 hover:bg-[#1F2023]/80 transition cursor-pointer">
+          <div className="flex items-center space-x-3 mb-4">
+            <span className="text-2xl">📊</span>
+            <h3 className="text-xl font-semibold">Analytics</h3>
+          </div>
+          <p className="text-gray-400">Track your content performance</p>
+        </div>
+      </div>
+    </DashboardLayout>
   );
 } 
