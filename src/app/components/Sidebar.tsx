@@ -58,9 +58,9 @@ export default function Sidebar() {
         {/* Products Section */}
         <div className="pt-6 mt-6 border-t border-gray-700">
           <Link 
-            href="/products"
+            href="/dashboard/products"
             className={`flex items-center justify-between text-gray-300 hover:text-white ${
-              pathname === '/products' ? 'text-white bg-white/10 p-2 rounded-lg' : ''
+              pathname === '/dashboard/products' ? 'text-white bg-white/10 p-2 rounded-lg' : ''
             }`}
           >
             <span className="flex items-center space-x-3">
