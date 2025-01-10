@@ -31,7 +31,7 @@ const navigationItems = [
   {
     title: 'Facebook Ads',
     description: 'Generate engaging ad creative content',
-    icon: '🎨',
+    icon: '🔥',
     href: '/facebook-ads'
   }
 ];
@@ -57,13 +57,18 @@ export default function Sidebar() {
         
         {/* Products Section */}
         <div className="pt-6 mt-6 border-t border-gray-700">
-          <div className="flex items-center justify-between">
+          <Link 
+            href="/products"
+            className={`flex items-center justify-between text-gray-300 hover:text-white ${
+              pathname === '/products' ? 'text-white bg-white/10 p-2 rounded-lg' : ''
+            }`}
+          >
             <span className="flex items-center space-x-3">
               <span className="text-xl">📦</span>
               <span>Products</span>
             </span>
             <span className="bg-gray-700 rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
-          </div>
+          </Link>
         </div>
 
         {/* Bottom Controls */}
