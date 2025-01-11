@@ -90,6 +90,13 @@ export default function Sidebar() {
             <span className="text-xl">⚙️</span>
             <span>Prompt Settings</span>
           </Link>
+          <Link
+            href="/profile"
+            className="flex items-center space-x-3 text-gray-300 hover:text-white w-full"
+          >
+            <span className="text-xl">👤</span>
+            <span>Profile</span>
+          </Link>
         </div>
       </nav>
     </aside>
