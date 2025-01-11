@@ -21,7 +21,6 @@ interface AdCreative {
     headline: string;
     description: string;
     industry?: string;
-    tags?: string[];
   };
   createdAt: string;
   updatedAt: string;
@@ -46,6 +45,7 @@ export default function AdCreativesLibrary() {
   const [filter, setFilter] = useState<'all' | 'image' | 'carousel' | 'video' | 'text'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<AdCreative | null>(null);
 
   const filteredCreatives = Object.entries(library.creatives)
     .filter(([_, creative]) => {
@@ -56,10 +56,7 @@ export default function AdCreativesLibrary() {
       if (!searchTerm) return true;
       return (
         creative.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        creative.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        creative.adContent?.tags?.some(tag => 
-          tag.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+        creative.description.toLowerCase().includes(searchTerm.toLowerCase())
       );
     });
 
@@ -69,8 +66,55 @@ export default function AdCreativesLibrary() {
   };
 
   const handleEdit = (creativeId: string) => {
-    // TODO: Open creative in Canva SDK editor
-    console.log('Edit creative:', creativeId);
+    setIsEditing(true);
+    setEditFormData(library.creatives[creativeId]);
+    setSelectedCreative(creativeId);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedCreative || !editFormData) return;
+    
+    const newLibrary = { ...library };
+    newLibrary.creatives[selectedCreative] = {
+      ...editFormData,
+      updatedAt: new Date().toISOString()
+    };
+    
+    setLibrary(newLibrary);
+    setIsEditing(false);
+    setEditFormData(null);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditFormData(null);
+  };
+
+  const handleEditInputChange = (
+    field: keyof AdCreative | 'primaryText' | 'headline' | 'description' | 'style' | 'type',
+    value: string
+  ) => {
+    if (!editFormData) return;
+
+    if (field === 'primaryText' || field === 'headline' || field === 'description' || field === 'style' || field === 'type') {
+      setEditFormData({
+        ...editFormData,
+        adContent: {
+          ...editFormData.adContent,
+          style: editFormData.adContent?.style || '',
+          type: (editFormData.adContent?.type || 'lead-gen') as 'lead-gen' | 'conversion',
+          primaryText: editFormData.adContent?.primaryText || '',
+          headline: editFormData.adContent?.headline || '',
+          description: editFormData.adContent?.description || '',
+          [field]: value
+        }
+      });
+    } else {
+      setEditFormData({
+        ...editFormData,
+        [field]: value
+      });
+    }
   };
 
   const handleDelete = (creativeId: string) => {
@@ -146,38 +190,12 @@ export default function AdCreativesLibrary() {
                 <p className="text-sm text-gray-400 line-clamp-4 flex-1">{creative.adContent?.primaryText || creative.description}</p>
               </div>
             ) : (
-              <>
-                <div className="aspect-video relative">
-                  {creative.imageUrl ? (
-                    <img
-                      src={creative.imageUrl}
-                      alt={creative.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-                      <span className="text-gray-400">No Preview</span>
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 flex-1">
-                  <h3 className="font-medium text-white line-clamp-1">{creative.name}</h3>
-                  <p className="text-sm text-gray-400 mt-1 line-clamp-2">{creative.description}</p>
-                </div>
-              </>
+              <div className="p-4 flex-1">
+                <h3 className="font-medium text-white line-clamp-1">{creative.name}</h3>
+                <p className="text-sm text-gray-400 mt-1 line-clamp-2">{creative.description}</p>
+              </div>
             )}
             <div className="border-t border-gray-700 p-4 flex items-center justify-between mt-auto">
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                creative.category === 'text'
-                  ? 'bg-purple-900/50 text-purple-400'
-                  : creative.category === 'image' 
-                  ? 'bg-blue-900/50 text-blue-400'
-                  : creative.category === 'carousel'
-                  ? 'bg-green-900/50 text-green-400'
-                  : 'bg-yellow-900/50 text-yellow-400'
-              }`}>
-                {creative.category.charAt(0).toUpperCase() + creative.category.slice(1)}
-              </span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={(e) => {
@@ -206,153 +224,207 @@ export default function AdCreativesLibrary() {
       {selectedCreative && (
         <div 
           className="fixed inset-0 bg-black/50 flex items-start justify-center p-6 overflow-y-auto"
-          onClick={() => setSelectedCreative(null)}
+          onClick={() => !isEditing && setSelectedCreative(null)}
         >
           <div 
             className="bg-[#2A2B2F] rounded-lg p-6 max-w-2xl w-full my-8 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white">Creative Details</h2>
-              <button
-                onClick={() => setSelectedCreative(null)}
-                className="text-gray-400 hover:text-white"
-              >
-                Close
-              </button>
+              <h2 className="text-xl font-bold text-white">
+                {isEditing ? 'Edit Creative' : 'Creative Details'}
+              </h2>
+              {!isEditing && (
+                <button
+                  onClick={() => setSelectedCreative(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  Close
+                </button>
+              )}
             </div>
 
             {library.creatives[selectedCreative].category === 'text' ? (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Primary Text</h3>
-                  <div className="relative">
-                    <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300 whitespace-pre-wrap">
-                      {library.creatives[selectedCreative].adContent?.primaryText}
+                {isEditing && editFormData ? (
+                  <>
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Name</h3>
+                      <input
+                        type="text"
+                        value={editFormData.name}
+                        onChange={(e) => handleEditInputChange('name', e.target.value)}
+                        className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                      />
                     </div>
-                    <button
-                      onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.primaryText || '')}
-                      className="absolute top-2 right-2 text-gray-400 hover:text-white"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Headline</h3>
-                  <div className="relative">
-                    <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300">
-                      {library.creatives[selectedCreative].adContent?.headline}
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Primary Text</h3>
+                      <textarea
+                        value={editFormData.adContent?.primaryText || ''}
+                        onChange={(e) => handleEditInputChange('primaryText', e.target.value)}
+                        rows={4}
+                        className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                      />
                     </div>
-                    <button
-                      onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.headline || '')}
-                      className="absolute top-2 right-2 text-gray-400 hover:text-white"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-white mb-2">Description</h3>
-                  <div className="relative">
-                    <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300">
-                      {library.creatives[selectedCreative].adContent?.description}
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Headline</h3>
+                      <input
+                        type="text"
+                        value={editFormData.adContent?.headline || ''}
+                        onChange={(e) => handleEditInputChange('headline', e.target.value)}
+                        className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                      />
                     </div>
-                    <button
-                      onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.description || '')}
-                      className="absolute top-2 right-2 text-gray-400 hover:text-white"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-between text-sm text-gray-400">
-                  <div>
-                    <span className="font-medium text-white">Style:</span> {library.creatives[selectedCreative].adContent?.style}
-                  </div>
-                  <div>
-                    <span className="font-medium text-white">Type:</span> {library.creatives[selectedCreative].adContent?.type}
-                  </div>
-                </div>
-
-                {library.creatives[selectedCreative].adContent?.tags && (
-                  <div>
-                    <h3 className="text-sm font-medium text-white mb-2">Tags</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {library.creatives[selectedCreative].adContent.tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-[#1F2023] rounded-full text-xs text-gray-400"
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Description</h3>
+                      <textarea
+                        value={editFormData.adContent?.description || ''}
+                        onChange={(e) => handleEditInputChange('description', e.target.value)}
+                        rows={3}
+                        className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                      />
+                    </div>
+                    <div className="flex justify-between">
+                      <div>
+                        <h3 className="text-sm font-medium text-white mb-2">Style</h3>
+                        <input
+                          type="text"
+                          value={editFormData.adContent?.style || ''}
+                          onChange={(e) => handleEditInputChange('style', e.target.value)}
+                          className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-white mb-2">Type</h3>
+                        <select
+                          value={editFormData.adContent?.type || 'lead-gen'}
+                          onChange={(e) => handleEditInputChange('type', e.target.value)}
+                          className="w-full bg-[#1F2023] rounded-lg px-4 py-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600"
                         >
-                          {tag}
-                        </span>
-                      ))}
+                          <option value="lead-gen">Lead Generation</option>
+                          <option value="conversion">Conversion</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Primary Text</h3>
+                      <div className="relative">
+                        <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300 whitespace-pre-wrap">
+                          {library.creatives[selectedCreative].adContent?.primaryText}
+                        </div>
+                        <button
+                          onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.primaryText || '')}
+                          className="absolute top-2 right-2 text-gray-400 hover:text-white"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Headline</h3>
+                      <div className="relative">
+                        <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300">
+                          {library.creatives[selectedCreative].adContent?.headline}
+                        </div>
+                        <button
+                          onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.headline || '')}
+                          className="absolute top-2 right-2 text-gray-400 hover:text-white"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-white mb-2">Description</h3>
+                      <div className="relative">
+                        <div className="bg-[#1F2023] rounded-lg p-4 text-gray-300">
+                          {library.creatives[selectedCreative].adContent?.description}
+                        </div>
+                        <button
+                          onClick={() => handleCopyToClipboard(library.creatives[selectedCreative].adContent?.description || '')}
+                          className="absolute top-2 right-2 text-gray-400 hover:text-white"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-400">
+                      <div>
+                        <span className="font-medium text-white">Style:</span> {library.creatives[selectedCreative].adContent?.style}
+                      </div>
+                      <div>
+                        <span className="font-medium text-white">Type:</span> {library.creatives[selectedCreative].adContent?.type}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <>
-                <div className="aspect-video">
-                  {library.creatives[selectedCreative].imageUrl ? (
-                    <img
-                      src={library.creatives[selectedCreative].imageUrl}
-                      alt={library.creatives[selectedCreative].name}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-800 rounded-lg flex items-center justify-center">
-                      <span className="text-gray-400">No Preview</span>
-                    </div>
-                  )}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-white">Name</h3>
+                  <p className="text-gray-400">{library.creatives[selectedCreative].name}</p>
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-white">Name</h3>
-                    <p className="text-gray-400">{library.creatives[selectedCreative].name}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-white">Description</h3>
-                    <p className="text-gray-400">{library.creatives[selectedCreative].description}</p>
-                  </div>
-                  {library.creatives[selectedCreative].dimensions && (
-                    <div className="flex justify-between">
-                      <div>
-                        <h3 className="text-sm font-medium text-white">Dimensions</h3>
-                        <p className="text-gray-400">
-                          {library.creatives[selectedCreative].dimensions.width} x{' '}
-                          {library.creatives[selectedCreative].dimensions.height}
-                        </p>
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-white">Category</h3>
-                        <p className="text-gray-400">
-                          {library.creatives[selectedCreative].category.charAt(0).toUpperCase() +
-                            library.creatives[selectedCreative].category.slice(1)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                <div>
+                  <h3 className="text-sm font-medium text-white">Description</h3>
+                  <p className="text-gray-400">{library.creatives[selectedCreative].description}</p>
                 </div>
-              </>
+                {library.creatives[selectedCreative].dimensions && (
+                  <div className="flex justify-between">
+                    <div>
+                      <h3 className="text-sm font-medium text-white">Dimensions</h3>
+                      <p className="text-gray-400">
+                        {library.creatives[selectedCreative].dimensions.width} x{' '}
+                        {library.creatives[selectedCreative].dimensions.height}
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-white">Category</h3>
+                      <p className="text-gray-400">
+                        {library.creatives[selectedCreative].category.charAt(0).toUpperCase() +
+                          library.creatives[selectedCreative].category.slice(1)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="pt-4 flex justify-end space-x-4">
-              <button
-                onClick={() => handleEdit(selectedCreative)}
-                className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-white transition-colors"
-              >
-                Edit Creative
-              </button>
-              <button
-                onClick={() => handleDelete(selectedCreative)}
-                className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 text-white transition-colors"
-              >
-                Delete Creative
-              </button>
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 text-white transition-colors"
+                  >
+                    Save Changes
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleEdit(selectedCreative)}
+                    className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-white transition-colors"
+                  >
+                    Edit Creative
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedCreative)}
+                    className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 text-white transition-colors"
+                  >
+                    Delete Creative
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

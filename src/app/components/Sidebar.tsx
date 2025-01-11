@@ -18,10 +18,10 @@ const navigationItems = [
     href: '/dashboard/hvco'
   },
   {
-    title: 'Hero Mechanisms',
+    title: 'Customer Avatars',
     description: 'Design effective hero sections and mechanisms',
     icon: '🎯',
-    href: '/dashboard/hero'
+    href: '/dashboard/avatars'
   },
   {
     title: 'Ad Creatives',
