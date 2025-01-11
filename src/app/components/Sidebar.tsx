@@ -27,7 +27,7 @@ const navigationItems = [
     title: 'Ad Creatives',
     description: 'Generate engaging ad creative content',
     icon: '🎨',
-    href: '/dashboard/ads'
+    href: '/dashboard/creatives'
   },
   {
     title: 'Facebook Ads',

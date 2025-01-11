@@ -241,16 +241,28 @@ Please use these examples as inspiration for tone and structure while creating a
       if (!editedOutputs) return;
       
       try {
-        await addTemplate({
-          style: adStyle,
-          type: activeTab,
-          primaryText: editedOutputs.primaryText,
-          headline: editedOutputs.headline,
-          description: editedOutputs.description,
-          industry: productCategory,
-          tags: keywords.split(',').map(t => t.trim()),
-        });
+        const library = JSON.parse(localStorage.getItem('ad-creatives-library') || '{"creatives": {}}');
+        const id = Date.now().toString();
         
+        library.creatives[id] = {
+          id,
+          name: editedOutputs.headline,
+          description: editedOutputs.description,
+          category: 'text',
+          adContent: {
+            style: adStyle,
+            type: activeTab,
+            primaryText: editedOutputs.primaryText,
+            headline: editedOutputs.headline,
+            description: editedOutputs.description,
+            industry: productCategory,
+            tags: keywords.split(',').map(t => t.trim()),
+          },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        
+        localStorage.setItem('ad-creatives-library', JSON.stringify(library));
         alert('Saved to Ad Creatives successfully!');
       } catch (error) {
         console.error('Error saving to ad creatives:', error);
