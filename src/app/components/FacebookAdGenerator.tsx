@@ -3,8 +3,9 @@
 import { Product } from '@/lib/types/product';
 import { useState, useEffect, type ChangeEvent } from 'react';
 import { useCompletion } from 'ai/react';
-import { useAdTemplates } from '@/lib/contexts/AdTemplatesContext';
+import { useAdStyles } from '@/lib/hooks/useAdStyles';
 import { generatePrompt } from '@/lib/utils/promptGenerator';
+import { useAdTemplates } from '@/lib/contexts/AdTemplatesContext';
 
 interface FacebookAdGeneratorProps {
   product: Product;
@@ -13,6 +14,8 @@ interface FacebookAdGeneratorProps {
 }
 
 export default function FacebookAdGenerator({ product, products = [], onBack }: FacebookAdGeneratorProps) {
+  const { leadGenStyles, conversionStyles, getStyleTemplate } = useAdStyles();
+  const { getExamplesForStyle, addTemplate } = useAdTemplates();
   const [activeTab, setActiveTab] = useState<'lead-gen' | 'conversion'>('lead-gen');
   const [selectedProduct, setSelectedProduct] = useState<Product>(product);
   
@@ -79,8 +82,6 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     },
   });
 
-  const { addTemplate, getExamplesForStyle } = useAdTemplates();
-
   // Update form when selected product changes
   useEffect(() => {
     setTargetMarket(selectedProduct.targetMarket || '');
@@ -101,17 +102,22 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     setFiveStarText(selectedProduct.testimonials?.[0] || '');
   }, [selectedProduct]);
 
+  // Reset adStyle when tab changes
+  useEffect(() => {
+    setAdStyle('');
+  }, [activeTab]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       let templateExamples = '';
       try {
-        const styleExamples = getExamplesForStyle?.(adStyle, activeTab);
+        const styleExamples = getExamplesForStyle(adStyle, activeTab);
         if (styleExamples?.examples.length) {
           templateExamples = `
 Here are examples of successful ads in this style:
-${styleExamples.examples.map((example, i) => `
+${styleExamples.examples.map((example: { primaryText: string; headline: string; description: string }, i: number) => `
 Example ${i + 1}:
 Primary Text:
 ${example.primaryText}
@@ -215,12 +221,12 @@ Please use these examples as inspiration for tone and structure while creating a
     }
   };
 
+  const getTextLength = (text: string | undefined) => text?.length || 0;
+
   const GeneratedView = () => {
     const [activeViewTab, setActiveViewTab] = useState<'ad-copy' | 'body-copy' | 'link-desc'>('ad-copy');
     const [editedOutputs, setEditedOutputs] = useState(adOutputs);
     
-    const getTextLength = (text: string | undefined) => text?.length || 0;
-
     const handleTextChange = (
       field: 'primaryText' | 'headline' | 'description',
       value: string
@@ -411,6 +417,35 @@ Please use these examples as inspiration for tone and structure while creating a
     );
   };
 
+  const renderAdStyleDropdown = () => {
+    const styles = activeTab === 'lead-gen' ? leadGenStyles : conversionStyles;
+    
+    return (
+      <div className="mb-6">
+        <label className="block text-sm font-medium mb-2">Ad Style*</label>
+        <p className="text-gray-400 text-sm mb-2">Please select what style of ad you'd like.</p>
+        <select 
+          className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+          value={adStyle}
+          onChange={(e) => setAdStyle(e.target.value)}
+          required
+        >
+          <option value="">Select A Style</option>
+          {styles.map((style) => (
+            <option key={style} value={style}>
+              {style.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+            </option>
+          ))}
+        </select>
+        {adStyle && getStyleTemplate(adStyle) && (
+          <p className="mt-2 text-sm text-gray-400">
+            {getStyleTemplate(adStyle)?.description}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {showGeneratedView ? (
@@ -495,41 +530,7 @@ Please use these examples as inspiration for tone and structure while creating a
               </div>
 
               {/* Ad Style */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-2">Ad Style*</label>
-                <p className="text-gray-400 text-sm mb-2">Please select what style of ad you'd like.</p>
-                <select 
-                  className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
-                  value={adStyle}
-                  onChange={(e) => setAdStyle(e.target.value)}
-                  required
-                >
-                  <option value="">Select A Style</option>
-                  {activeTab === 'lead-gen' ? (
-                    <>
-                      <option value="hero">Hero Ad</option>
-                      <option value="weird_authority">Weird Authority Ad</option>
-                      <option value="secret_info">A Secret Piece Of Information</option>
-                      <option value="commitment">Commitment And Consistency</option>
-                      <option value="ancient_story">Ancient Story And the Hidden Secret</option>
-                      <option value="crush">Crush The Competition</option>
-                      <option value="pas">Problem, Agitate, Solve</option>
-                      <option value="timeline">Timeline</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="social_proof">Social Proof & Testimonials</option>
-                      <option value="limited_time">Limited Time Offer</option>
-                      <option value="price_comparison">Price Comparison</option>
-                      <option value="before_after">Before & After Results</option>
-                      <option value="product_demo">Product Demo & Features</option>
-                      <option value="bundle_deal">Bundle Deal Offer</option>
-                      <option value="seasonal">Seasonal or Holiday Special</option>
-                      <option value="flash_sale">Flash Sale</option>
-                    </>
-                  )}
-                </select>
-              </div>
+              {renderAdStyleDropdown()}
 
               {/* Call To Action */}
               <div className="mb-6">

@@ -3,19 +3,22 @@
 import { useState } from 'react';
 import { useLocalStorage } from '@/lib/hooks/useLocalStorage';
 
+interface StyleTemplate {
+  description: string;
+  guidelines: string;
+  category: 'lead-gen' | 'conversion';
+}
+
 interface PromptTemplate {
   basePrompt: string;
   leadGenTemplate: string;
   conversionTemplate: string;
   styleTemplates: {
-    [key: string]: {
-      description: string;
-      guidelines: string;
-    };
+    [key: string]: StyleTemplate;
   };
 }
 
-const defaultPromptTemplate: PromptTemplate = {
+export const defaultPromptTemplate: PromptTemplate = {
   basePrompt: "You are an expert Facebook ad copywriter. Create a Facebook {adType} ad with these details:",
   leadGenTemplate: `Style: {style}
 Call to Action: {callToAction}
@@ -57,11 +60,83 @@ Shipping: {shipping}`,
   styleTemplates: {
     'hero': {
       description: 'A bold, attention-grabbing ad that positions the product as the hero solution',
-      guidelines: 'Focus on the transformative power of the product\nUse strong, confident language\nHighlight key benefits immediately'
+      guidelines: 'Focus on the transformative power of the product\nUse strong, confident language\nHighlight key benefits immediately',
+      category: 'lead-gen'
+    },
+    'weird_authority': {
+      description: 'Present unconventional expertise or unique insights',
+      guidelines: 'Start with an unexpected fact or claim\nEstablish authority through specific expertise\nCreate curiosity through unusual connections',
+      category: 'lead-gen'
+    },
+    'secret_info': {
+      description: 'Present exclusive or little-known information',
+      guidelines: 'Hint at insider knowledge\nCreate curiosity gaps\nEmphasize exclusivity of the information',
+      category: 'lead-gen'
+    },
+    'commitment': {
+      description: 'Build on existing beliefs and commitments',
+      guidelines: 'Reference common beliefs or behaviors\nShow how your solution aligns with their values\nUse consistency principle',
+      category: 'lead-gen'
+    },
+    'ancient_story': {
+      description: 'Connect historical wisdom with modern solutions',
+      guidelines: 'Start with an intriguing historical reference\nBridge to current problem\nReveal the timeless solution',
+      category: 'lead-gen'
+    },
+    'crush': {
+      description: 'Position against common ineffective solutions',
+      guidelines: 'Identify common misconceptions\nShow why traditional approaches fail\nPresent your superior solution',
+      category: 'lead-gen'
+    },
+    'pas': {
+      description: 'Problem, Agitate, Solve framework',
+      guidelines: 'Clearly state the problem\nAmplify the pain points\nPresent your solution as the relief',
+      category: 'lead-gen'
+    },
+    'timeline': {
+      description: 'Show progression and transformation over time',
+      guidelines: 'Establish the before state\nShow key transformation points\nHighlight the after results',
+      category: 'lead-gen'
     },
     'social_proof': {
       description: 'Leverage testimonials and social validation',
-      guidelines: 'Lead with impressive numbers\nFeature specific customer results\nInclude authority markers'
+      guidelines: 'Lead with impressive numbers\nFeature specific customer results\nInclude authority markers and testimonials',
+      category: 'conversion'
+    },
+    'limited_time': {
+      description: 'Create urgency through time-limited offers',
+      guidelines: 'Emphasize scarcity\nClear deadline\nCompelling time-sensitive offer',
+      category: 'conversion'
+    },
+    'price_comparison': {
+      description: 'Show value through price comparisons',
+      guidelines: 'Compare to alternatives\nHighlight cost savings\nDemonstrate superior value',
+      category: 'conversion'
+    },
+    'before_after': {
+      description: 'Showcase transformation and results',
+      guidelines: 'Clear before state\nDramatic transformation\nCompelling after results',
+      category: 'conversion'
+    },
+    'product_demo': {
+      description: 'Demonstrate product features and benefits',
+      guidelines: 'Show product in action\nHighlight key features\nConnect features to benefits',
+      category: 'conversion'
+    },
+    'bundle_deal': {
+      description: 'Present value-packed bundle offers',
+      guidelines: 'Stack valuable items\nShow total value\nHighlight savings',
+      category: 'conversion'
+    },
+    'seasonal': {
+      description: 'Tie offer to seasonal or holiday themes',
+      guidelines: 'Connect to current season/holiday\nCreate timely urgency\nThemed messaging',
+      category: 'conversion'
+    },
+    'flash_sale': {
+      description: 'Create extreme urgency with flash offers',
+      guidelines: 'Very short time window\nDeep discount\nClear countdown elements',
+      category: 'conversion'
     }
   }
 };
@@ -75,6 +150,12 @@ export default function AdPromptSettings() {
   const [selectedStyle, setSelectedStyle] = useState<string>('hero');
   const [isEditing, setIsEditing] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>(promptTemplate);
+  const [styleFilter, setStyleFilter] = useState<'all' | 'lead-gen' | 'conversion'>('all');
+
+  const filteredStyles = Object.entries(editingTemplate.styleTemplates).filter(([_, style]) => {
+    if (styleFilter === 'all') return true;
+    return style.category === styleFilter;
+  });
 
   const handleSave = () => {
     setPromptTemplate(editingTemplate);
@@ -194,9 +275,22 @@ export default function AdPromptSettings() {
         {activeTab === 'styles' && (
           <div className="grid grid-cols-4 gap-6">
             <div className="col-span-1 space-y-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-white">Filter Styles</label>
+                <select
+                  className="w-full bg-[#2A2B2F] rounded-lg p-2 text-white"
+                  value={styleFilter}
+                  onChange={(e) => setStyleFilter(e.target.value as 'all' | 'lead-gen' | 'conversion')}
+                >
+                  <option value="all">All Styles</option>
+                  <option value="lead-gen">Lead Generation</option>
+                  <option value="conversion">Conversion</option>
+                </select>
+              </div>
+
               <h3 className="font-medium text-white">Styles</h3>
               <div className="space-y-2">
-                {Object.keys(editingTemplate.styleTemplates).map((style) => (
+                {filteredStyles.map(([style, template]) => (
                   <button
                     key={style}
                     onClick={() => setSelectedStyle(style)}
@@ -206,7 +300,12 @@ export default function AdPromptSettings() {
                         : 'bg-[#2A2B2F] text-gray-400 hover:text-white hover:bg-[#3A3B3F]'
                     }`}
                   >
-                    {style.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                    <div className="flex justify-between items-center">
+                      <span>{style.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</span>
+                      <span className={`text-xs ${template.category === 'lead-gen' ? 'text-blue-400' : 'text-green-400'}`}>
+                        {template.category === 'lead-gen' ? 'Lead' : 'Conv'}
+                      </span>
+                    </div>
                   </button>
                 ))}
                 {isEditing && (
@@ -220,7 +319,8 @@ export default function AdPromptSettings() {
                             ...editingTemplate.styleTemplates,
                             [newStyle]: {
                               description: '',
-                              guidelines: ''
+                              guidelines: '',
+                              category: 'lead-gen'
                             }
                           }
                         });
@@ -238,6 +338,43 @@ export default function AdPromptSettings() {
             <div className="col-span-3 space-y-6">
               {selectedStyle && (
                 <>
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-white">Category</label>
+                      <select
+                        className="bg-[#2A2B2F] rounded-lg p-2 text-white"
+                        value={editingTemplate.styleTemplates[selectedStyle].category}
+                        onChange={(e) => {
+                          const category = e.target.value as 'lead-gen' | 'conversion';
+                          const updatedTemplates = {
+                            ...editingTemplate.styleTemplates,
+                            [selectedStyle]: {
+                              ...editingTemplate.styleTemplates[selectedStyle],
+                              category
+                            }
+                          };
+                          
+                          setEditingTemplate({
+                            ...editingTemplate,
+                            styleTemplates: updatedTemplates
+                          });
+
+                          // Immediately save changes if not in editing mode
+                          if (!isEditing) {
+                            setPromptTemplate({
+                              ...promptTemplate,
+                              styleTemplates: updatedTemplates
+                            });
+                          }
+                        }}
+                        disabled={!isEditing}
+                      >
+                        <option value="lead-gen">Lead Generation</option>
+                        <option value="conversion">Conversion</option>
+                      </select>
+                    </div>
+                  </div>
+
                   {renderTextArea(
                     editingTemplate.styleTemplates[selectedStyle].description,
                     (value) =>
