@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Product } from '@/lib/types/product';
 import DashboardLayout from '@/app/components/DashboardLayout';
 import Link from 'next/link';
@@ -12,8 +12,38 @@ interface FormData extends Omit<Product, 'id' | 'userId' | 'createdAt' | 'update
 
 export default function ProductsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const { user } = useAuth();
-  const { products, loading, error, addProduct } = useProducts();
+  const { products, loading, error, addProduct, updateProduct, deleteProduct } = useProducts();
+
+  const handleEdit = (product: Product) => {
+    setSelectedProduct(product);
+    setIsEditModalOpen(true);
+    setShowDeleteConfirm(null);
+  };
+
+  const handleDelete = async (productId: string) => {
+    try {
+      await deleteProduct(productId);
+      setShowDeleteConfirm(null);
+    } catch (err) {
+      console.error('Failed to delete product:', err);
+      // TODO: Add error toast notification
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showDeleteConfirm && !(event.target as Element).closest('.product-menu')) {
+        setShowDeleteConfirm(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showDeleteConfirm]);
 
   if (loading) {
     return (
@@ -74,7 +104,30 @@ export default function ProductsPage() {
                   <span className="text-2xl">📦</span>
                   <h3 className="text-xl font-semibold">{product.name}</h3>
                 </div>
-                <button className="text-gray-400 hover:text-white">⋮</button>
+                <div className="relative product-menu">
+                  <button 
+                    onClick={() => setShowDeleteConfirm(showDeleteConfirm === product.id ? null : product.id)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    ⋮
+                  </button>
+                  {showDeleteConfirm === product.id && (
+                    <div className="absolute right-0 mt-2 w-48 bg-[#2A2B2F] rounded-lg shadow-lg py-1 z-10">
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#1F2023] hover:text-white"
+                      >
+                        Edit Product
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-[#1F2023] hover:text-red-300"
+                      >
+                        Delete Product
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="text-gray-400 mb-4 line-clamp-2">{product.description}</p>
               <div className="flex justify-between items-center">
@@ -99,10 +152,34 @@ export default function ProductsPage() {
           onCreate={async (data) => {
             if (!user) return;
             try {
-              await addProduct(data);
+              await addProduct({
+                ...data,
+                userId: user.uid
+              });
               setIsCreateModalOpen(false);
             } catch (err) {
               console.error('Failed to create product:', err);
+              // TODO: Add error toast notification
+            }
+          }}
+        />
+      )}
+
+      {isEditModalOpen && selectedProduct && (
+        <CreateProductModal 
+          initialData={selectedProduct}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedProduct(null);
+          }} 
+          onCreate={async (data) => {
+            if (!user || !selectedProduct) return;
+            try {
+              await updateProduct(selectedProduct.id, data);
+              setIsEditModalOpen(false);
+              setSelectedProduct(null);
+            } catch (err) {
+              console.error('Failed to update product:', err);
               // TODO: Add error toast notification
             }
           }}
@@ -114,31 +191,33 @@ export default function ProductsPage() {
 
 function CreateProductModal({ 
   onClose, 
-  onCreate 
+  onCreate, 
+  initialData 
 }: { 
   onClose: () => void;
   onCreate: (data: FormData) => Promise<void>;
+  initialData?: Product;
 }) {
   const [formData, setFormData] = useState<FormData>({
-    name: '',
-    description: '',
-    category: '',
-    targetMarket: '',
-    painPoints: '',
-    uniqueSellingPoints: '',
-    productFeatures: [''],
-    methodology: '',
-    scientificStudies: '',
-    featuredInPress: '',
-    credibilityMarkers: [''],
-    uniqueMechanism: '',
-    answers: [{ question: '', answer: '' }],
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    category: initialData?.category || '',
+    targetMarket: initialData?.targetMarket || '',
+    painPoints: initialData?.painPoints || '',
+    uniqueSellingPoints: initialData?.uniqueSellingPoints || '',
+    productFeatures: initialData?.productFeatures || [''],
+    methodology: initialData?.methodology || '',
+    scientificStudies: initialData?.scientificStudies || '',
+    featuredInPress: initialData?.featuredInPress || '',
+    credibilityMarkers: initialData?.credibilityMarkers || [''],
+    uniqueMechanism: initialData?.uniqueMechanism || '',
+    answers: initialData?.answers || [{ question: '', answer: '' }],
     statistics: {
-      reviews: 0,
-      rating: 0,
-      totalCustomers: 0
+      reviews: initialData?.statistics?.reviews || 0,
+      rating: initialData?.statistics?.rating || 0,
+      totalCustomers: initialData?.statistics?.totalCustomers || 0
     },
-    testimonials: ['']
+    testimonials: initialData?.testimonials || ['']
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -208,18 +287,22 @@ function CreateProductModal({
       <div className="bg-[#1F2023] rounded-xl p-6 max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-2xl font-bold">Create New Product</h2>
-            <p className="text-gray-400 text-sm">Tell us a little bit about your product here.</p>
+            <h2 className="text-2xl font-bold">{initialData ? 'Edit Product' : 'Create New Product'}</h2>
+            <p className="text-gray-400 text-sm">
+              {initialData ? 'Update your product details below.' : 'Tell us a little bit about your product here.'}
+            </p>
           </div>
           <div className="flex items-center space-x-4">
-            <button
-              type="button"
-              onClick={handleAutoFill}
-              className="text-purple-400 hover:text-purple-300 flex items-center space-x-2"
-            >
-              <span>✨</span>
-              <span>Auto-fill Example</span>
-            </button>
+            {!initialData && (
+              <button
+                type="button"
+                onClick={handleAutoFill}
+                className="text-purple-400 hover:text-purple-300 flex items-center space-x-2"
+              >
+                <span>✨</span>
+                <span>Auto-fill Example</span>
+              </button>
+            )}
             <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
           </div>
         </div>
@@ -546,7 +629,7 @@ function CreateProductModal({
             className="bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Creating...' : 'Create Product'}
+            {isSubmitting ? (initialData ? 'Updating...' : 'Creating...') : (initialData ? 'Update Product' : 'Create Product')}
           </button>
         </div>
       </div>

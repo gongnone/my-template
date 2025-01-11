@@ -76,10 +76,6 @@ export default function Sidebar() {
         {/* Bottom Controls */}
         <div className="fixed bottom-0 left-0 w-64 bg-[#1F2023] p-4 space-y-4">
           <button className="flex items-center space-x-3 text-gray-300 hover:text-white w-full">
-            <span className="text-xl">🌞</span>
-            <span>Light Mode</span>
-          </button>
-          <button className="flex items-center space-x-3 text-gray-300 hover:text-white w-full">
             <span className="text-xl">❓</span>
             <span>Support</span>
           </button>
