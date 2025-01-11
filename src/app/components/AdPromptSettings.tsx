@@ -147,7 +147,11 @@ export default function AdPromptSettings() {
     defaultPromptTemplate
   );
   const [activeTab, setActiveTab] = useState<'base' | 'lead-gen' | 'conversion' | 'styles'>('base');
-  const [selectedStyle, setSelectedStyle] = useState<string>('hero');
+  const [selectedStyle, setSelectedStyle] = useState<string>(() => {
+    // Initialize with the first available style
+    const styles = Object.keys(defaultPromptTemplate.styleTemplates);
+    return styles.length > 0 ? styles[0] : '';
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate>(promptTemplate);
   const [styleFilter, setStyleFilter] = useState<'all' | 'lead-gen' | 'conversion'>('all');
@@ -187,14 +191,14 @@ export default function AdPromptSettings() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Ad Prompt Settings</h1>
         <div className="space-x-4">
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-white"
+              className="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-white transition-colors"
             >
               Edit Templates
             </button>
@@ -202,7 +206,7 @@ export default function AdPromptSettings() {
             <>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 text-white"
+                className="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 text-white transition-colors"
               >
                 Save Changes
               </button>
@@ -211,13 +215,13 @@ export default function AdPromptSettings() {
                   setEditingTemplate(promptTemplate);
                   setIsEditing(false);
                 }}
-                className="px-4 py-2 bg-[#2A2B2F] rounded-lg hover:bg-[#3A3B3F] text-white"
+                className="px-4 py-2 bg-[#2A2B2F] rounded-lg hover:bg-[#3A3B3F] text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleReset}
-                className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 text-white"
+                className="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 text-white transition-colors"
               >
                 Reset to Default
               </button>
@@ -232,10 +236,10 @@ export default function AdPromptSettings() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 ${
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab
                 ? 'border-b-2 border-purple-600 text-purple-600'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-white hover:border-b-2 hover:border-gray-400'
             }`}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
@@ -273,12 +277,12 @@ export default function AdPromptSettings() {
         )}
 
         {activeTab === 'styles' && (
-          <div className="grid grid-cols-4 gap-6">
-            <div className="col-span-1 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="md:col-span-1 space-y-4">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-white">Filter Styles</label>
                 <select
-                  className="w-full bg-[#2A2B2F] rounded-lg p-2 text-white"
+                  className="w-full bg-[#2A2B2F] rounded-lg p-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-colors"
                   value={styleFilter}
                   onChange={(e) => setStyleFilter(e.target.value as 'all' | 'lead-gen' | 'conversion')}
                 >
@@ -288,26 +292,32 @@ export default function AdPromptSettings() {
                 </select>
               </div>
 
-              <h3 className="font-medium text-white">Styles</h3>
               <div className="space-y-2">
-                {filteredStyles.map(([style, template]) => (
-                  <button
-                    key={style}
-                    onClick={() => setSelectedStyle(style)}
-                    className={`w-full text-left px-3 py-2 rounded-lg ${
-                      selectedStyle === style
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-[#2A2B2F] text-gray-400 hover:text-white hover:bg-[#3A3B3F]'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span>{style.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</span>
-                      <span className={`text-xs ${template.category === 'lead-gen' ? 'text-blue-400' : 'text-green-400'}`}>
-                        {template.category === 'lead-gen' ? 'Lead' : 'Conv'}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                <h3 className="font-medium text-white text-sm">Styles</h3>
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                  {filteredStyles.map(([style, template]) => (
+                    <button
+                      key={style}
+                      onClick={() => setSelectedStyle(style)}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                        selectedStyle === style
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-[#2A2B2F] text-gray-400 hover:text-white hover:bg-[#3A3B3F]'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span>{style.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}</span>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          template.category === 'lead-gen' 
+                            ? 'bg-blue-900/50 text-blue-400' 
+                            : 'bg-green-900/50 text-green-400'
+                        }`}>
+                          {template.category === 'lead-gen' ? 'Lead' : 'Conv'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
                 {isEditing && (
                   <button
                     onClick={() => {
@@ -327,7 +337,7 @@ export default function AdPromptSettings() {
                         setSelectedStyle(newStyle);
                       }
                     }}
-                    className="w-full px-3 py-2 bg-green-600 rounded-lg hover:bg-green-700 text-white"
+                    className="w-full px-3 py-2 bg-green-600 rounded-lg hover:bg-green-700 text-white transition-colors"
                   >
                     + Add Style
                   </button>
@@ -335,15 +345,15 @@ export default function AdPromptSettings() {
               </div>
             </div>
 
-            <div className="col-span-3 space-y-6">
-              {selectedStyle && (
+            <div className="md:col-span-3 space-y-6">
+              {selectedStyle && editingTemplate.styleTemplates[selectedStyle] && (
                 <>
                   <div className="flex justify-between items-center mb-4">
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-white">Category</label>
                       <select
-                        className="bg-[#2A2B2F] rounded-lg p-2 text-white"
-                        value={editingTemplate.styleTemplates[selectedStyle].category}
+                        className="bg-[#2A2B2F] rounded-lg p-2 text-white border border-gray-700 focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-colors"
+                        value={editingTemplate.styleTemplates[selectedStyle]?.category || 'lead-gen'}
                         onChange={(e) => {
                           const category = e.target.value as 'lead-gen' | 'conversion';
                           const updatedTemplates = {
@@ -359,7 +369,6 @@ export default function AdPromptSettings() {
                             styleTemplates: updatedTemplates
                           });
 
-                          // Immediately save changes if not in editing mode
                           if (!isEditing) {
                             setPromptTemplate({
                               ...promptTemplate,
