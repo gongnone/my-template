@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useProducts } from '@/lib/contexts/ProductContext';
 
 const navigationItems = [
   {
@@ -38,6 +39,7 @@ const navigationItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { products } = useProducts();
 
   return (
     <aside className="w-64 bg-[#1F2023] min-h-screen p-4 fixed">
@@ -67,7 +69,7 @@ export default function Sidebar() {
               <span className="text-xl">📦</span>
               <span>Products</span>
             </span>
-            <span className="bg-gray-700 rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
+            <span className="bg-gray-700 rounded-full w-5 h-5 flex items-center justify-center text-xs">{products.length}</span>
           </Link>
         </div>
 
