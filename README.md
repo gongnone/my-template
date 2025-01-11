@@ -1,4 +1,14 @@
-# SAAS Template
+# AI Copy Generator
+
+Last Updated: March 26, 2024
+
+## Recent Updates
+- Added Facebook Ad Generator component
+- Implemented product selection flow
+- Fixed authentication and routing issues
+- Added proper TypeScript interfaces for components
+
+## Project Structure
 
 This is a full-stack template project for Software Composers to create applications with AI. Built with modern technologies and best practices.
 

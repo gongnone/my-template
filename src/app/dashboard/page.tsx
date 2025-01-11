@@ -7,15 +7,19 @@ import { useEffect } from 'react';
 import DashboardLayout from '@/app/components/DashboardLayout';
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { status: subscriptionStatus, planType } = useSubscription();
   const router = useRouter();
 
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       router.push('/');
     }
-  }, [user, router]);
+  }, [user, loading, router]);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   if (!user) return null;
 
@@ -25,7 +29,10 @@ export default function DashboardPage() {
         <button className="bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20">
           View Favourite Headlines
         </button>
-        <button className="bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700">
+        <button 
+          onClick={() => router.push('/facebook-ads')}
+          className="bg-purple-600 px-4 py-2 rounded-lg hover:bg-purple-700"
+        >
           Create New Ad
         </button>
       </div>

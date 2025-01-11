@@ -22,8 +22,7 @@ export const signInWithGoogle = async () => {
   try {
     console.log('Starting Google sign in...');
     const result = await signInWithPopup(auth, provider);
-    console.log('Sign in successful, redirecting...');
-    window.location.href = '/dashboard';
+    console.log('Sign in successful');
     return result;
   } catch (error) {
     console.error('Error signing in with Google:', error);

@@ -4,6 +4,7 @@ import { Product } from '@/lib/types/product';
 import { useState, useEffect, type ChangeEvent } from 'react';
 import { useCompletion } from 'ai/react';
 import { useAdTemplates } from '@/lib/contexts/AdTemplatesContext';
+import { generatePrompt } from '@/lib/utils/promptGenerator';
 
 interface FacebookAdGeneratorProps {
   product: Product;
@@ -128,49 +129,25 @@ Please use these examples as inspiration for tone and structure while creating a
         console.log('No templates available for this style');
       }
 
-      const prompt = `You are an expert Facebook ad copywriter. Create a Facebook ${activeTab === 'lead-gen' ? 'lead generation' : 'conversion'} ad with these details:
-
-Style: ${adStyle}
-Call to Action: ${callToAction}
-Target Market: ${targetMarket}
-Product: ${specificFeatures}
-Pain Points: ${painPoints}
-Benefits: ${benefits}
-Description: ${productDescription}
-Story: ${theStory}
-Key Benefits: ${listBenefits}
-Technical Details: ${specificTerms}
-Studies: ${studiesAndResearch}
-Authority: ${credibleAuthority}
-Press Features: ${pressInfo}
-Reviews: ${numberOfReviews} reviews with ${averageStarRating} average rating
-Example Review: ${fiveStarText}
-${activeTab === 'conversion' ? `
-Regular Price: ${regularPrice}
-Sale Price: ${salePrice}
-Discount: ${discountPercentage}%
-Deadline: ${offerDeadline}
-Bonuses: ${bonusItems}
-Guarantee: ${guarantee}
-Shipping: ${shipping}
-` : ''}
-
-${templateExamples}
-
-Format your response exactly like this:
-1. Primary Text (2000 chars max):
-[Write compelling ad copy here]
-
-2. Headline (255 chars max):
-[Write attention-grabbing headline here]
-
-3. Description (150 chars max):
-[Write concise description here]`;
+      const prompt = generatePrompt({
+        adType: activeTab,
+        adStyle,
+        callToAction,
+        product: selectedProduct,
+        regularPrice,
+        salePrice,
+        discountPercentage,
+        offerDeadline,
+        bonusItems,
+        guarantee,
+        shipping,
+        templateExamples
+      });
 
       const response = await complete(prompt);
       
       if (response) {
-        console.log('API Response:', response); // Debug log
+        console.log('API Response:', response);
         
         try {
           const sections = response.split(/\d\.\s+/);

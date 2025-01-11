@@ -81,10 +81,13 @@ export default function Sidebar() {
             <span className="text-xl">❓</span>
             <span>Support</span>
           </button>
-          <button className="flex items-center space-x-3 text-gray-300 hover:text-white w-full">
+          <Link
+            href="/settings/prompts"
+            className="flex items-center space-x-3 text-gray-300 hover:text-white w-full"
+          >
             <span className="text-xl">⚙️</span>
-            <span>Settings</span>
-          </button>
+            <span>Prompt Settings</span>
+          </Link>
         </div>
       </nav>
     </aside>
