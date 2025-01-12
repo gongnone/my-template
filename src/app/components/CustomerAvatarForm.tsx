@@ -25,27 +25,7 @@ interface CustomerAvatar {
   peakEngagementTime: string;
 }
 
-interface CustomerAvatarFormProps {
-  onClose: () => void;
-}
-
-const sampleAvatar: CustomerAvatar = {
-  mainProblem: "Struggling to generate consistent leads and sales from social media marketing efforts",
-  currentFrustrations: "Current marketing strategies are expensive and time-consuming with unpredictable results. Difficulty standing out in a crowded market.",
-  urgencyLevel: "high",
-  ageRange: "35-50",
-  location: "United States, Urban Areas",
-  incomeLevel: "$100,000 - $250,000",
-  familyStatus: "Married with children",
-  mainGoals: "Want to build a scalable system for generating qualified leads and converting them into high-ticket sales without constant manual effort",
-  immediateActionTriggers: "Proven ROI metrics, case studies showing quick implementation, done-for-you solutions that can be implemented within 30 days",
-  purchaseObjections: "Concerned about implementation time, past experiences with failed marketing solutions, worried about the learning curve for team members",
-  informationSources: "LinkedIn, Industry podcasts, Business conferences, Professional networks, Email newsletters from trusted experts",
-  preferredContentFormat: "video",
-  peakEngagementTime: "Early mornings (6-8am) and late evenings (8-10pm)"
-};
-
-export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps) {
+export default function CustomerAvatarForm() {
   const [formData, setFormData] = useState<CustomerAvatar>({
     mainProblem: '',
     currentFrustrations: '',
@@ -74,7 +54,6 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
       });
       localStorage.setItem('customer-avatars', JSON.stringify(avatars));
       alert('Customer Avatar saved successfully!');
-      onClose(); // Close the form after successful save
     } catch (error) {
       console.error('Error saving customer avatar:', error);
       alert('Error saving customer avatar. Please try again.');
@@ -91,25 +70,10 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
     }));
   };
 
-  const handleQuickFill = () => {
-    setFormData(sampleAvatar);
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Quick Fill Button */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleQuickFill}
-          className="bg-[#2A2B2F] text-gray-300 px-4 py-2 rounded-lg hover:bg-[#3A3B3F] hover:text-white transition-colors"
-        >
-          Quick Fill Sample Data
-        </button>
-      </div>
-
       {/* Pain Points Section */}
-      <div className="bg-[#2A2B2F] rounded-xl p-6">
+      <div className="bg-[#1F2023] rounded-xl p-6">
         <h3 className="text-lg font-medium mb-4">Primary Pain Points</h3>
         <div className="space-y-4">
           <div>
@@ -120,7 +84,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="mainProblem"
               value={formData.mainProblem}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="Describe the main problem your customer avatar is facing..."
             />
@@ -133,7 +97,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="currentFrustrations"
               value={formData.currentFrustrations}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="What frustrates them about current solutions..."
             />
@@ -146,7 +110,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="urgencyLevel"
               value={formData.urgencyLevel}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
             >
               <option value="low">Low - Nice to have</option>
@@ -158,7 +122,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
       </div>
 
       {/* Demographics Section */}
-      <div className="bg-[#2A2B2F] rounded-xl p-6">
+      <div className="bg-[#1F2023] rounded-xl p-6">
         <h3 className="text-lg font-medium mb-4">Core Demographics</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -170,7 +134,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="ageRange"
               value={formData.ageRange}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
               placeholder="e.g., 25-34"
             />
@@ -184,7 +148,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="location"
               value={formData.location}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
               placeholder="e.g., United States, Urban areas"
             />
@@ -198,7 +162,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="incomeLevel"
               value={formData.incomeLevel}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
               placeholder="e.g., $50,000-$75,000"
             />
@@ -212,7 +176,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="familyStatus"
               value={formData.familyStatus}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
               placeholder="e.g., Married with children"
             />
@@ -221,7 +185,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
       </div>
 
       {/* Motivators Section */}
-      <div className="bg-[#2A2B2F] rounded-xl p-6">
+      <div className="bg-[#1F2023] rounded-xl p-6">
         <h3 className="text-lg font-medium mb-4">Key Motivators</h3>
         <div className="space-y-4">
           <div>
@@ -232,7 +196,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="mainGoals"
               value={formData.mainGoals}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="What are their primary goals and desired outcomes..."
             />
@@ -245,7 +209,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="immediateActionTriggers"
               value={formData.immediateActionTriggers}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="Triggers that would make them act now..."
             />
@@ -258,7 +222,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="purchaseObjections"
               value={formData.purchaseObjections}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="What might stop them from buying..."
             />
@@ -267,7 +231,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
       </div>
 
       {/* Behavioral Triggers Section */}
-      <div className="bg-[#2A2B2F] rounded-xl p-6">
+      <div className="bg-[#1F2023] rounded-xl p-6">
         <h3 className="text-lg font-medium mb-4">Behavioral Triggers</h3>
         <div className="space-y-4">
           <div>
@@ -278,7 +242,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="informationSources"
               value={formData.informationSources}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
               required
               placeholder="Their preferred information sources..."
             />
@@ -291,7 +255,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="preferredContentFormat"
               value={formData.preferredContentFormat}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
             >
               <option value="video">Video</option>
@@ -309,7 +273,7 @@ export default function CustomerAvatarForm({ onClose }: CustomerAvatarFormProps)
               name="peakEngagementTime"
               value={formData.peakEngagementTime}
               onChange={handleInputChange}
-              className="w-full bg-[#1F2023] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
               required
               placeholder="e.g., Weekday evenings, Weekend mornings"
             />

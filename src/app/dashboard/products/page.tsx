@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Product } from '@/lib/types/product';
-import DashboardLayout from '@/app/components/DashboardLayout';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useProducts } from '@/lib/contexts/ProductContext';
@@ -47,26 +46,22 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
-        <div className="text-red-500 bg-red-100/10 p-4 rounded-lg">
-          {error}
-        </div>
-      </DashboardLayout>
+      <div className="text-red-500 bg-red-100/10 p-4 rounded-lg">
+        {error}
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Products</h1>
@@ -185,7 +180,7 @@ export default function ProductsPage() {
           }}
         />
       )}
-    </DashboardLayout>
+    </>
   );
 }
 

@@ -4,7 +4,6 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import DashboardLayout from '@/app/components/DashboardLayout';
 
 export default function DashboardPage() {
   const { user, loading } = useAuth();
@@ -24,7 +23,7 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <DashboardLayout>
+    <>
       <div className="flex items-center space-x-4 mb-8">
         <button className="bg-white/10 px-4 py-2 rounded-lg hover:bg-white/20">
           View Favourite Headlines
@@ -58,6 +57,6 @@ export default function DashboardPage() {
           <p className="text-gray-400">Track your content performance</p>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   );
 } 
