@@ -1,69 +1,63 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Product } from '@/lib/types/product';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import FacebookAdGenerator from '@/app/components/FacebookAdGenerator';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useState } from 'react';
 import { useProducts } from '@/lib/contexts/ProductContext';
+import FacebookAdGenerator from '@/app/components/FacebookAdGenerator';
+import VectorAdGenerator from '@/app/components/VectorAdGenerator';
+import { Product } from '@/lib/types/product';
 
 export default function FacebookAdsPage() {
-  const searchParams = useSearchParams();
+  const { products } = useProducts();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const { user } = useAuth();
-  const { products, loading, error } = useProducts();
-
-  useEffect(() => {
-    const productId = searchParams.get('productId');
-    if (productId) {
-      const product = products.find(p => p.id === productId);
-      if (product) {
-        setSelectedProduct(product);
-      }
-    }
-  }, [searchParams, products]);
+  const [generatorType, setGeneratorType] = useState<'standard' | 'vector'>('standard');
 
   if (!selectedProduct) {
     return (
-      <div className="bg-[#1F2023] rounded-xl p-6">
-        <div className="flex flex-col items-center justify-center py-12">
-          {loading ? (
-            <div className="text-gray-400">Loading products...</div>
-          ) : error ? (
-            <div className="text-red-400">Error loading products: {error}</div>
-          ) : (
-            <>
-              <div className="text-4xl mb-4">📦</div>
-              <h3 className="text-xl font-semibold mb-2">Select a Product</h3>
-              <p className="text-gray-400 mb-6 text-center max-w-md">
-                Choose a product from your catalog or create a new one to generate Facebook ads
-              </p>
-              {products.length === 0 ? (
-                <Link
-                  href="/products/new"
-                  className="bg-purple-600 px-6 py-2 rounded-lg hover:bg-purple-700"
-                >
-                  Create Your First Product
-                </Link>
-              ) : (
-                <div className="w-full max-w-md">
-                  {products.map((product) => (
-                    <button
-                      key={product.id}
-                      onClick={() => setSelectedProduct(product)}
-                      className="w-full bg-[#2A2B2F] p-4 rounded-lg mb-2 text-left hover:bg-[#2A2B2F]/80"
-                    >
-                      <div className="font-semibold mb-1">{product.name}</div>
-                      <div className="text-sm text-gray-400 line-clamp-2">
-                        {product.description}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+      <div className="h-full overflow-y-auto p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Facebook Ads</h1>
+          <p className="text-gray-400">Select a product to start generating ads</p>
+        </div>
+
+        <div className="mb-8">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setGeneratorType('standard')}
+              className={`px-4 py-2 rounded-lg ${
+                generatorType === 'standard'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              Standard Generator
+            </button>
+            <button
+              onClick={() => setGeneratorType('vector')}
+              className={`px-4 py-2 rounded-lg ${
+                generatorType === 'vector'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              }`}
+            >
+              Vector-Enhanced Generator
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {products.map((product) => (
+            <div
+              key={product.id}
+              onClick={() => setSelectedProduct(product)}
+              className="bg-[#1F2023] rounded-xl p-6 hover:bg-[#1F2023]/80 transition cursor-pointer"
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <span className="text-2xl">📦</span>
+                <h3 className="text-xl font-semibold">{product.name}</h3>
+              </div>
+              <p className="text-gray-400">{product.description}</p>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -71,11 +65,19 @@ export default function FacebookAdsPage() {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <FacebookAdGenerator 
-        product={selectedProduct} 
-        products={products} 
-        onBack={() => setSelectedProduct(null)} 
-      />
+      {generatorType === 'standard' ? (
+        <FacebookAdGenerator 
+          product={selectedProduct} 
+          products={products} 
+          onBack={() => setSelectedProduct(null)} 
+        />
+      ) : (
+        <VectorAdGenerator
+          product={selectedProduct}
+          products={products}
+          onBack={() => setSelectedProduct(null)}
+        />
+      )}
     </div>
   );
 } 
