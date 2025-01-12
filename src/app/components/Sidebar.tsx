@@ -6,26 +6,20 @@ import { useProducts } from '@/lib/contexts/ProductContext';
 
 const navigationItems = [
   {
-    title: 'Direct Response Headlines',
-    description: 'Generate compelling headlines for direct response marketing',
-    icon: '📝',
-    href: '/dashboard/headlines'
-  },
-  {
-    title: 'HVCO Titles',
-    description: 'Create high-value content offer titles',
+    title: 'Ad Scorecard',
+    description: 'Pinpoint the best performing ads',
     icon: '📚',
     href: '/dashboard/hvco'
   },
   {
     title: 'Customer Avatars',
-    description: 'Design effective hero sections and mechanisms',
+    description: 'Design effective customer avatars',
     icon: '🎯',
     href: '/dashboard/customer-avatars'
   },
   {
     title: 'Ad Creatives',
-    description: 'Generate engaging ad creative content',
+    description: 'Ad Creatives for Facebook Ads',
     icon: '🎨',
     href: '/dashboard/creatives'
   },
@@ -33,7 +27,7 @@ const navigationItems = [
     title: 'Facebook Ads',
     description: 'Generate engaging ad creative content',
     icon: '🔥',
-    href: '/facebook-ads'
+    href: 'dashboard/facebook-ads'
   }
 ];
 
