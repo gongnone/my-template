@@ -21,7 +21,7 @@ const navigationItems = [
     title: 'Customer Avatars',
     description: 'Design effective hero sections and mechanisms',
     icon: '🎯',
-    href: '/dashboard/avatars'
+    href: '/dashboard/customer-avatars'
   },
   {
     title: 'Ad Creatives',
