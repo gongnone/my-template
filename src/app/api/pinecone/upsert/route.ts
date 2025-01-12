@@ -7,7 +7,7 @@ const pinecone = new Pinecone({
 
 export async function POST(req: Request) {
   try {
-    const { vectors, namespace = 'ads' } = await req.json();
+    const { vectors, namespace = 'kkadtool' } = await req.json();
 
     if (!vectors || !Array.isArray(vectors)) {
       return new NextResponse('Vectors array is required', { status: 400 });
@@ -15,7 +15,10 @@ export async function POST(req: Request) {
 
     const index = pinecone.index(process.env.PINECONE_INDEX_NAME!);
     
-    await index.upsert(vectors);
+    await index.upsert({
+      vectors,
+      namespace
+    });
 
     return NextResponse.json({
       message: 'Vectors upserted successfully',

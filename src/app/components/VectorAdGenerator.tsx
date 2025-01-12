@@ -52,7 +52,7 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
         body: JSON.stringify({ 
           vector: queryEmbedding,
           topK: 5,
-          namespace: 'ads'
+          namespace: 'kkadtool'
         }),
       });
 
@@ -66,6 +66,64 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Function to parse the generated text into ad components
+  const parseGeneratedAd = (text: string) => {
+    console.log('Parsing text:', text); // Debug log
+    
+    const headlines: string[] = [];
+    const primaryTexts: string[] = [];
+    const descriptions: string[] = [];
+    
+    const lines = text.split('\n');
+    let currentSection = '';
+    
+    for (const line of lines) {
+      const lowerLine = line.toLowerCase();
+      console.log('Processing line:', line); // Debug log
+      
+      if (lowerLine.includes('headline:')) {
+        currentSection = 'headline';
+        const content = line.split(/headline:\s*/i)[1];
+        if (content) headlines.push(content.trim());
+      } else if (lowerLine.includes('primary text:')) {
+        currentSection = 'primaryText';
+        const content = line.split(/primary text:\s*/i)[1];
+        if (content) primaryTexts.push(content.trim());
+      } else if (lowerLine.includes('description:')) {
+        currentSection = 'description';
+        const content = line.split(/description:\s*/i)[1];
+        if (content) descriptions.push(content.trim());
+      } else if (line.trim() && currentSection) {
+        switch (currentSection) {
+          case 'headline':
+            if (headlines.length > 0) {
+              headlines[headlines.length - 1] += ' ' + line.trim();
+            }
+            break;
+          case 'primaryText':
+            if (primaryTexts.length > 0) {
+              primaryTexts[primaryTexts.length - 1] += ' ' + line.trim();
+            }
+            break;
+          case 'description':
+            if (descriptions.length > 0) {
+              descriptions[descriptions.length - 1] += ' ' + line.trim();
+            }
+            break;
+        }
+      }
+    }
+
+    const result = {
+      headline: headlines[0] || '',
+      primaryText: primaryTexts[0] || '',
+      description: descriptions[0] || '',
+    };
+
+    console.log('Parsed result:', result); // Debug log
+    return result;
   };
 
   // Function to generate new ad using OpenAI
@@ -101,7 +159,12 @@ High-Performing Examples:
 ${examplesContext}
 
 Template:
-${templateToUse}`;
+${templateToUse}
+
+Please generate a Facebook ad in this exact format, keeping each label on its own line:
+Headline: [The headline]
+Primary Text: [The main ad copy]
+Description: [The link description]`;
 
       const response = await fetch('/api/openai/chat', {
         method: 'POST',
@@ -112,20 +175,26 @@ ${templateToUse}`;
       if (!response.ok) throw new Error('Failed to generate ad');
       
       const data = await response.json();
+      console.log('OpenAI Response:', data); // Debug log
+
+      if (!data.text) throw new Error('No text in response');
+      
+      const parsedAd = parseGeneratedAd(data.text);
+      console.log('Parsed Ad:', parsedAd); // Debug log
       
       const newAd: AdCreative = {
         id: Date.now().toString(),
-        name: data.headline || 'Generated Ad',
-        description: data.description || '',
+        name: parsedAd.headline || 'Generated Ad',
+        description: parsedAd.description || '',
         category: 'text',
         adContent: {
           style: selectedStyle,
           type: adType,
-          primaryText: data.primaryText || '',
-          headline: data.headline || '',
-          description: data.description || '',
+          primaryText: parsedAd.primaryText || '',
+          headline: parsedAd.headline || '',
+          description: parsedAd.description || '',
           industry: product?.category || '',
-        } as AdContent,
+        },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -155,7 +224,7 @@ ${templateToUse}`;
               }
             }
           }],
-          namespace: 'ads'
+          namespace: 'kkadtool'
         }),
       });
 
@@ -281,7 +350,7 @@ ${templateToUse}`;
         </button>
       </div>
 
-      {/* Generated Ads */}
+      {/* Generated Ads Section */}
       {generatedAds.length > 0 && (
         <div className="bg-[#1F2023] rounded-xl p-6">
           <h2 className="text-lg font-medium mb-4">Generated Ads</h2>
@@ -294,15 +363,48 @@ ${templateToUse}`;
                   </span>
                   <span className="text-xs text-gray-400">{ad.adContent?.style}</span>
                 </div>
-                <h3 className="font-medium text-white mb-2 line-clamp-2">
-                  {ad.adContent?.headline}
-                </h3>
-                <p className="text-sm text-gray-400 mb-2 line-clamp-3">
-                  {ad.adContent?.primaryText}
-                </p>
-                <p className="text-xs text-gray-400">
-                  Generated: {new Date(ad.createdAt).toLocaleDateString()}
-                </p>
+
+                {/* Ad Content */}
+                <div className="space-y-4 mb-4">
+                  {/* Headline */}
+                  <div>
+                    <h4 className="text-xs text-gray-400 mb-1">Headline</h4>
+                    <p className="text-white font-medium">
+                      {ad.adContent?.headline || 'No headline'}
+                    </p>
+                  </div>
+
+                  {/* Primary Text */}
+                  <div>
+                    <h4 className="text-xs text-gray-400 mb-1">Primary Text</h4>
+                    <p className="text-white text-sm line-clamp-3">
+                      {ad.adContent?.primaryText || 'No primary text'}
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <h4 className="text-xs text-gray-400 mb-1">Description</h4>
+                    <p className="text-white text-sm">
+                      {ad.adContent?.description || 'No description'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2 border-t border-gray-700">
+                  <p className="text-xs text-gray-400">
+                    Generated: {new Date(ad.createdAt).toLocaleDateString()}
+                  </p>
+                  <button
+                    onClick={() => {
+                      const content = `Headline: ${ad.adContent?.headline}\n\nPrimary Text: ${ad.adContent?.primaryText}\n\nDescription: ${ad.adContent?.description}`;
+                      navigator.clipboard.writeText(content);
+                    }}
+                    className="text-xs text-purple-400 hover:text-purple-300"
+                  >
+                    Copy All
+                  </button>
+                </div>
               </div>
             ))}
           </div>

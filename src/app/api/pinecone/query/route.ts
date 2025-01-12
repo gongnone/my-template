@@ -3,12 +3,11 @@ import { Pinecone } from '@pinecone-database/pinecone';
 
 const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY!,
-  environment: process.env.PINECONE_ENVIRONMENT!,
 });
 
 export async function POST(req: Request) {
   try {
-    const { vector, topK = 5, namespace = 'ads' } = await req.json();
+    const { vector, topK = 5, namespace = 'kkadtool' } = await req.json();
 
     if (!vector) {
       return new NextResponse('Vector is required', { status: 400 });

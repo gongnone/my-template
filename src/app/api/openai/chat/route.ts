@@ -1,23 +1,25 @@
 import { OpenAIStream, StreamingTextResponse } from 'ai';
 import OpenAI from 'openai';
+import { NextResponse } from 'next/server';
 
-// Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 });
 
-// Set the runtime to edge
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    // Ask OpenAI for a streaming chat completion given the prompt
+    // Ask OpenAI for a chat completion given the prompt
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      stream: true,
       messages: [
+        {
+          role: 'system',
+          content: 'You are an expert Facebook ad copywriter. Generate ad copy in the exact format specified, keeping the labels "Headline:", "Primary Text:", and "Description:" on their own lines.'
+        },
         {
           role: 'user',
           content: prompt,
@@ -27,19 +29,15 @@ export async function POST(req: Request) {
       max_tokens: 3000,
     });
 
-    // Convert the response into a friendly text-stream
-    const stream = OpenAIStream(response);
-    
-    // Respond with the stream
-    return new StreamingTextResponse(stream);
+    // Return the generated text directly instead of streaming
+    return NextResponse.json({
+      text: response.choices[0].message.content
+    });
   } catch (error) {
     console.error('OpenAI API error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Error generating response' }), 
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
+    return NextResponse.json(
+      { error: 'Error generating response' }, 
+      { status: 500 }
     );
   }
 }
