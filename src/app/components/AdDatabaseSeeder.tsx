@@ -42,42 +42,89 @@ export default function AdDatabaseSeeder() {
       setLoading(true);
       setError(null);
       
+      // Validate required fields
+      if (!adData.headline || !adData.primaryText || !adData.description) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      console.log('Getting embeddings for:', {
+        headline: adData.headline,
+        primaryText: adData.primaryText,
+        description: adData.description
+      });
+
       // Get embeddings for the ad content
-      const embeddingResponse = await fetch('/api/embeddings', {
+      const embeddingResponse = await fetch('/api/openai/embeddings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: `${adData.headline} ${adData.primaryText} ${adData.description}`
+          text: `${adData.headline}\n${adData.primaryText}\n${adData.description}`
         })
       });
       
       if (!embeddingResponse.ok) {
-        throw new Error('Failed to generate embeddings');
+        const errorData = await embeddingResponse.json();
+        console.error('Embeddings API error:', errorData);
+        throw new Error(errorData.error || 'Failed to generate embeddings');
       }
       
-      const { embedding } = await embeddingResponse.json();
+      const embedData = await embeddingResponse.json();
+      console.log('Embeddings response:', embedData);
+      
+      if (!embedData.embeddings || !Array.isArray(embedData.embeddings)) {
+        console.error('Invalid embeddings response:', embedData);
+        throw new Error('Invalid embeddings data received');
+      }
       
       // Store in Pinecone
+      console.log('Storing in Pinecone...');
+      const vector = {
+        id: `ad_${Date.now()}`,
+        values: embedData.embeddings,
+        metadata: {
+          headline: adData.headline,
+          primaryText: adData.primaryText,
+          description: adData.description,
+          type: adData.type,
+          style: adData.style,
+          industry: adData.industry,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      console.log('Prepared vector:', vector);
+
       const storeResponse = await fetch('/api/pinecone/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          namespace: 'kkadtool',
-          vectors: [{
-            id: Date.now().toString(),
-            values: embedding,
-            metadata: {
-              ...adData,
-              timestamp: new Date().toISOString()
-            }
-          }]
+          vectors: [vector],
+          namespace: 'ads'
         })
       });
       
       if (!storeResponse.ok) {
-        throw new Error('Failed to store ad in database');
+        let errorMessage;
+        try {
+          const errorData = await storeResponse.json();
+          errorMessage = errorData.error;
+        } catch {
+          // If response is not JSON, get it as text
+          errorMessage = await storeResponse.text();
+        }
+        console.error('Pinecone API error:', errorMessage);
+        throw new Error(errorMessage || 'Failed to store in database');
       }
-      
+
+      let storeData;
+      try {
+        storeData = await storeResponse.json();
+        console.log('Pinecone store response:', storeData);
+      } catch (err) {
+        console.error('Error parsing Pinecone response:', err);
+        // Continue if we can't parse the response but the status was ok
+      }
+
       setSuccess(true);
       // Reset form after 2 seconds
       setTimeout(() => {
@@ -93,7 +140,8 @@ export default function AdDatabaseSeeder() {
       }, 2000);
       
     } catch (err) {
-      setError('Failed to save ad to database');
+      console.error('Error saving ad:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save ad to database');
     } finally {
       setLoading(false);
     }

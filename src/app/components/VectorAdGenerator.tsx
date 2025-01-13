@@ -20,6 +20,12 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
   const [promptTemplate] = useLocalStorage('ad-prompt-template', defaultPromptTemplate);
   const [searchQuery, setSearchQuery] = useState('');
   const [similarAds, setSimilarAds] = useState<VectorizedAd[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>(product);
+  
+  // Add new state variables for ad content
+  const [primaryText, setPrimaryText] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [description, setDescription] = useState('');
 
   // Function to get embeddings from OpenAI API
   const getEmbeddings = async (text: string): Promise<number[]> => {
@@ -131,108 +137,116 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
     try {
       setIsLoading(true);
       setError(null);
+      console.log('Starting ad generation process...');
 
-      // Get similar high-performing ads
-      const similarHighPerformingAds = similarAds
-        .filter(ad => ad.metrics.clickThroughRate > 0.02)
-        .slice(0, 3);
+      // Validate required fields
+      if (!selectedStyle || !adType || !primaryText || !headline || !description) {
+        throw new Error('Please fill in all required fields');
+      }
+      console.log('Form validation passed');
 
-      // Construct prompt with examples from similar ads
-      const examplesContext = similarHighPerformingAds
-        .map(ad => `Example (CTR: ${ad.metrics.clickThroughRate}):
-Headline: ${ad.content.adContent?.headline}
-Primary Text: ${ad.content.adContent?.primaryText}
-Description: ${ad.content.adContent?.description}`)
-        .join('\n\n');
-
-      const styleTemplate = promptTemplate.styleTemplates[selectedStyle];
-      const templateToUse = adType === 'lead-gen' 
-        ? promptTemplate.leadGenTemplate 
-        : promptTemplate.conversionTemplate;
-
-      const prompt = `${promptTemplate.basePrompt}
-
-Style Guidelines:
-${styleTemplate.guidelines}
-
-High-Performing Examples:
-${examplesContext}
-
-Template:
-${templateToUse}
-
-Please generate a Facebook ad in this exact format, keeping each label on its own line:
-Headline: [The headline]
-Primary Text: [The main ad copy]
-Description: [The link description]`;
-
-      const response = await fetch('/api/openai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!response.ok) throw new Error('Failed to generate ad');
-      
-      const data = await response.json();
-      console.log('OpenAI Response:', data); // Debug log
-
-      if (!data.text) throw new Error('No text in response');
-      
-      const parsedAd = parseGeneratedAd(data.text);
-      console.log('Parsed Ad:', parsedAd); // Debug log
-      
+      // Create the new ad object
       const newAd: AdCreative = {
         id: Date.now().toString(),
-        name: parsedAd.headline || 'Generated Ad',
-        description: parsedAd.description || '',
+        name: headline || 'Generated Ad',
+        description: description || '',
         category: 'text',
         adContent: {
           style: selectedStyle,
           type: adType,
-          primaryText: parsedAd.primaryText || '',
-          headline: parsedAd.headline || '',
-          description: parsedAd.description || '',
-          industry: product?.category || '',
+          primaryText: primaryText || '',
+          headline: headline || '',
+          description: description || '',
+          industry: selectedProduct?.category || '',
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+      console.log('Created new ad object:', newAd);
 
-      setGeneratedAds(prev => [...prev, newAd]);
+      // Get embeddings for the ad content
+      try {
+        const adContent = newAd.adContent;
+        if (!adContent) {
+          throw new Error('Ad content is missing');
+        }
+        console.log('Requesting embeddings for text:', `${adContent.headline} ${adContent.primaryText} ${adContent.description}`);
+        
+        const embeddingResponse = await fetch('/api/openai/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `${adContent.headline} ${adContent.primaryText} ${adContent.description}`
+          })
+        });
 
-      // Store the new ad in vector database
-      const adContent = newAd.adContent!;
-      const embedding = await getEmbeddings(
-        `${adContent.headline} ${adContent.primaryText} ${adContent.description}`
-      );
+        if (!embeddingResponse.ok) {
+          const errorText = await embeddingResponse.text();
+          console.error('Embeddings API error response:', errorText);
+          throw new Error(`Failed to generate embeddings: ${errorText}`);
+        }
 
-      await fetch('/api/pinecone/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vectors: [{
-            id: newAd.id,
-            values: embedding,
-            metadata: {
-              content: newAd,
-              metrics: {
-                clickThroughRate: 0,
-                conversionRate: 0,
-                engagement: 0,
-                impressions: 0
+        const embedData = await embeddingResponse.json();
+        console.log('Received embeddings response:', embedData);
+
+        if (!embedData.embeddings) {
+          console.error('Invalid embeddings response:', embedData);
+          throw new Error('Embeddings data is missing from response');
+        }
+
+        // Save to Pinecone
+        console.log('Preparing Pinecone request with embeddings');
+        const storeResponse = await fetch('/api/pinecone/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vectors: [{
+              id: newAd.id,
+              values: embedData.embeddings,
+              metadata: {
+                content: newAd,
+                metrics: {
+                  clickThroughRate: 0,
+                  conversionRate: 0,
+                  engagement: 0,
+                  impressions: 0
+                }
               }
-            }
-          }],
-          namespace: 'kkadtool'
-        }),
-      });
+            }],
+            namespace: 'kkadtool'
+          })
+        });
+
+        if (!storeResponse.ok) {
+          const errorData = await storeResponse.text();
+          console.error('Pinecone API error response:', errorData);
+          throw new Error(`Failed to save ad to database: ${errorData}`);
+        }
+
+        const storeData = await storeResponse.json();
+        console.log('Pinecone store response:', storeData);
+
+        setGeneratedAds(prev => [newAd, ...prev]);
+        setError(null);
+        console.log('Ad saved successfully');
+
+      } catch (error: unknown) {
+        console.error('Detailed error saving ad:', error);
+        if (error instanceof Error) {
+          console.error('Error stack:', error.stack);
+        }
+        setError(error instanceof Error ? error.message : 'Failed to save ad');
+      }
 
     } catch (error) {
-      console.error('Error generating ad:', error);
-      setError('Failed to generate ad');
+      console.error('Top level error:', error);
+      if (error instanceof Error) {
+        console.error('Error stack:', error.stack);
+      }
+      setError(error instanceof Error ? error.message : 'Failed to generate ad');
     } finally {
       setIsLoading(false);
+      console.log('Generation process completed');
     }
   };
 
@@ -242,6 +256,13 @@ Description: [The link description]`;
       searchSimilarAds(searchQuery);
     }
   }, [searchQuery]);
+
+  // Update product when props change
+  useEffect(() => {
+    if (product) {
+      setSelectedProduct(product);
+    }
+  }, [product]);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
@@ -257,79 +278,58 @@ Description: [The link description]`;
         )}
       </div>
 
-      {/* Search Section */}
-      <div className="bg-[#1F2023] rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-medium mb-4">Search Similar Ads</h2>
-        <div className="flex gap-4">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search for similar ads..."
-            className="flex-1 bg-[#2A2B2F] rounded-lg p-3 text-white"
-          />
-          <button
-            onClick={() => searchSimilarAds(searchQuery)}
-            disabled={isLoading}
-            className="px-6 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
-          >
-            {isLoading ? 'Searching...' : 'Search'}
-          </button>
-        </div>
-      </div>
-
-      {/* Similar Ads Section */}
-      {similarAds.length > 0 && (
-        <div className="bg-[#1F2023] rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-medium mb-4">Similar Ads</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {similarAds.map((ad) => (
-              <div key={ad.id} className="bg-[#2A2B2F] rounded-lg p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-purple-400">
-                    {ad.content.adContent?.type === 'lead-gen' ? 'Lead Generation' : 'Conversion'}
-                  </span>
-                  <span className="text-xs text-gray-400">{ad.content.adContent?.style}</span>
-                </div>
-                <h3 className="font-medium text-white mb-2 line-clamp-2">
-                  {ad.content.adContent?.headline}
-                </h3>
-                <p className="text-sm text-gray-400 mb-2 line-clamp-3">
-                  {ad.content.adContent?.primaryText}
-                </p>
-                <div className="flex justify-between text-xs text-gray-400">
-                  <span>CTR: {(ad.metrics.clickThroughRate * 100).toFixed(2)}%</span>
-                  <span>Conv: {(ad.metrics.conversionRate * 100).toFixed(2)}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Generation Controls */}
-      <div className="bg-[#1F2023] rounded-xl p-6">
-        <h2 className="text-lg font-medium mb-4">Generate New Ad</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Ad Type</label>
+      {/* Main Form Section */}
+      <div className="bg-[#1A1B1E] rounded-xl p-8">
+        {/* Product Selection */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Product*</label>
+          <div className="relative">
             <select
-              value={adType}
-              onChange={(e) => setAdType(e.target.value as 'lead-gen' | 'conversion')}
-              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+              value={selectedProduct?.id || ''}
+              onChange={(e) => {
+                const newProduct = products.find(p => p.id === e.target.value);
+                if (newProduct) setSelectedProduct(newProduct);
+              }}
+              className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white appearance-none cursor-pointer text-lg"
+              required
             >
-              <option value="lead-gen">Lead Generation</option>
-              <option value="conversion">Conversion</option>
+              {products.length === 0 ? (
+                <option value="">No products available</option>
+              ) : (
+                <>
+                  <option value="">MindfulBody Pro Fitness Program</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+              <svg 
+                className="h-6 w-6 fill-current" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20"
+              >
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Style</label>
+        </div>
+
+        {/* Ad Style */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Ad Style*</label>
+          <p className="text-gray-400 text-base mb-3">Please select what style of ad you'd like.</p>
+          <div className="relative">
             <select
               value={selectedStyle}
               onChange={(e) => setSelectedStyle(e.target.value)}
-              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+              className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white appearance-none cursor-pointer text-lg"
+              required
             >
-              <option value="">Select a style</option>
+              <option value="">Select A Style</option>
               {Object.entries(promptTemplate.styleTemplates)
                 .filter(([_, template]) => template.category === adType)
                 .map(([style, template]) => (
@@ -338,13 +338,125 @@ Description: [The link description]`;
                   </option>
                 ))}
             </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+              <svg 
+                className="h-6 w-6 fill-current" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20"
+              >
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
           </div>
         </div>
-        
+
+        {/* Ad Call To Action */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Ad Call To Action*</label>
+          <p className="text-gray-400 text-base mb-3">Please select your primary call to action.</p>
+          <div className="relative">
+            <select
+              value={adType}
+              onChange={(e) => setAdType(e.target.value as 'lead-gen' | 'conversion')}
+              className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white appearance-none cursor-pointer text-lg"
+              required
+            >
+              <option value="">Select A Call To Action</option>
+              <option value="lead-gen">Lead Generation</option>
+              <option value="conversion">Conversion</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+              <svg 
+                className="h-6 w-6 fill-current" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20"
+              >
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Target Market */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Target Market*</label>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Busy professionals aged 30-50 who want to get fit but struggle with time..."
+            className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white text-lg"
+          />
+        </div>
+
+        {/* Primary Text */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Primary Text</label>
+          <textarea
+            value={primaryText}
+            onChange={(e) => setPrimaryText(e.target.value)}
+            placeholder="Enter primary ad text"
+            className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white text-lg min-h-[200px] resize-y placeholder-gray-500 border border-gray-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
+          />
+        </div>
+
+        {/* Headline */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Headline</label>
+          <input
+            type="text"
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value)}
+            placeholder="Enter headline"
+            className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white text-lg placeholder-gray-500 border border-gray-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
+          />
+        </div>
+
+        {/* Description */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Enter ad description"
+            className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white text-lg min-h-[120px] resize-y placeholder-gray-500 border border-gray-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-colors"
+          />
+        </div>
+
+        {/* Similar Ads Section */}
+        {similarAds.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Similar Ads</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {similarAds.map((ad) => (
+                <div key={ad.id} className="bg-[#2A2B2F] rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-purple-400">
+                      {ad.content.adContent?.type === 'lead-gen' ? 'Lead Generation' : 'Conversion'}
+                    </span>
+                    <span className="text-xs text-gray-400">{ad.content.adContent?.style}</span>
+                  </div>
+                  <h3 className="font-medium text-white mb-2 line-clamp-2">
+                    {ad.content.adContent?.headline}
+                  </h3>
+                  <p className="text-sm text-gray-400 mb-2 line-clamp-3">
+                    {ad.content.adContent?.primaryText}
+                  </p>
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>CTR: {(ad.metrics.clickThroughRate * 100).toFixed(2)}%</span>
+                    <span>Conv: {(ad.metrics.conversionRate * 100).toFixed(2)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Generate Button */}
         <button
           onClick={generateAd}
           disabled={isLoading || !selectedStyle}
-          className="w-full px-6 py-3 bg-purple-600 rounded-lg hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+          className="w-full px-8 py-4 bg-purple-600 rounded-xl hover:bg-purple-700 text-white transition-colors disabled:opacity-50 text-lg font-medium"
         >
           {isLoading ? 'Generating...' : 'Generate Ad'}
         </button>
@@ -352,11 +464,11 @@ Description: [The link description]`;
 
       {/* Generated Ads Section */}
       {generatedAds.length > 0 && (
-        <div className="bg-[#1F2023] rounded-xl p-6">
-          <h2 className="text-lg font-medium mb-4">Generated Ads</h2>
+        <div className="bg-[#1A1B1E] rounded-xl p-8">
+          <h2 className="text-xl font-semibold text-white mb-4">Generated Ads</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {generatedAds.map((ad) => (
-              <div key={ad.id} className="bg-[#2A2B2F] rounded-lg p-4">
+              <div key={ad.id} className="bg-[#2A2B2F] rounded-xl p-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-purple-400">
                     {ad.adContent?.type === 'lead-gen' ? 'Lead Generation' : 'Conversion'}
@@ -412,7 +524,7 @@ Description: [The link description]`;
       )}
 
       {error && (
-        <div className="bg-red-500/10 text-red-500 p-4 rounded-lg">
+        <div className="bg-red-500/10 text-red-500 p-4 rounded-xl">
           {error}
         </div>
       )}

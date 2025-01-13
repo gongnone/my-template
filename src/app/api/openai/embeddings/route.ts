@@ -1,32 +1,39 @@
-import { OpenAIStream } from 'ai';
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
-// Initialize OpenAI configuration
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
     const { text } = await req.json();
 
     if (!text) {
-      return new NextResponse('Text is required', { status: 400 });
+      return NextResponse.json(
+        { error: 'Text is required' },
+        { status: 400 }
+      );
     }
 
     const response = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: "text-embedding-3-small",
       input: text,
+      encoding_format: "float",
     });
 
+    // Convert Float32Array to regular array for JSON serialization
+    const embeddings = Array.from(response.data[0].embedding);
+
     return NextResponse.json({
-      embeddings: response.data[0].embedding,
+      embeddings
     });
+
   } catch (error) {
     console.error('Error generating embeddings:', error);
-    return new NextResponse('Error generating embeddings', { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to generate embeddings' },
+      { status: 500 }
+    );
   }
 } 
