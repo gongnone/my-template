@@ -33,8 +33,21 @@ export interface AdMetrics {
 
 export interface VectorizedAd {
   id: string;
-  embedding: number[];
-  content: AdCreative;
-  metrics: AdMetrics;
-  timestamp: string;
+  values: number[];
+  metadata: {
+    headline: string;
+    primaryText: string;
+    description: string;
+    style: string;
+    type: 'lead-gen' | 'conversion';
+    industry: string;
+    tags: string[];
+    createdAt: string;
+    updatedAt: string;
+    clickThroughRate: number;
+    conversionRate: number;
+    engagement: number;
+    impressions: number;
+  };
+  score?: number;
 } 

@@ -13,6 +13,27 @@ interface VectorAdGeneratorProps {
   onBack?: () => void;
 }
 
+interface PineconeMatch {
+  id: string;
+  score: number;
+  values: number[];
+  metadata: {
+    headline: string;
+    primaryText: string;
+    description: string;
+    style: string;
+    type: string;
+    industry: string;
+    tags: string[];
+    clickThroughRate: number;
+    conversionRate: number;
+    engagement: number;
+    impressions: number;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
 export default function VectorAdGenerator({ product, products = [], customerAvatars = [], onBack }: VectorAdGeneratorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,11 +70,17 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
     }
   };
 
+  // Update product when props change
+  useEffect(() => {
+    if (product) {
+      setSelectedProduct(product);
+    }
+  }, [product]);
+
   // Function to search similar ads using vector similarity
-  const searchSimilarAds = async (query: string) => {
+  const searchSimilarAds = async (searchContext: string) => {
     try {
-      setIsLoading(true);
-      const queryEmbedding = await getEmbeddings(query);
+      const queryEmbedding = await getEmbeddings(searchContext);
       
       const response = await fetch('/api/pinecone/query', {
         method: 'POST',
@@ -61,19 +88,17 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
         body: JSON.stringify({ 
           vector: queryEmbedding,
           topK: 5,
-          namespace: 'kkadtool'
+          namespace: 'ad-database'
         }),
       });
 
       if (!response.ok) throw new Error('Failed to search similar ads');
       
       const results = await response.json();
-      setSimilarAds(results.matches);
+      return results.matches;
     } catch (error) {
       console.error('Error searching similar ads:', error);
-      setError('Failed to search similar ads');
-    } finally {
-      setIsLoading(false);
+      throw error;
     }
   };
 
@@ -148,56 +173,76 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
       }
       console.log('Form validation passed');
 
+      // Get the appropriate template based on ad type
+      const template = adType === 'lead-gen' ? promptTemplate.leadGenTemplate : promptTemplate.conversionTemplate;
+      const styleTemplate = promptTemplate.styleTemplates[selectedStyle];
+
+      if (!styleTemplate) {
+        throw new Error('Selected style template not found');
+      }
+
       // Create search context from avatar and product
       const searchContext = [
         selectedAvatar.description,
         ...selectedAvatar.painPoints,
         ...selectedAvatar.motivations,
         selectedProduct?.description || '',
-        selectedStyle,
+        styleTemplate.description,
+        styleTemplate.guidelines,
         adType
       ].filter(Boolean).join(' ');
 
-      // Get embeddings for search context
-      console.log('Getting embeddings for search context');
-      const embeddings = await getEmbeddings(searchContext);
-
       // Search for similar ads
       console.log('Searching for similar ads');
-      const response = await fetch('/api/pinecone/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vector: embeddings,
-          topK: 3,
-          namespace: 'kkadtool'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to search similar ads');
-      }
-
-      const { matches } = await response.json();
+      const matches = await searchSimilarAds(searchContext);
+      setSimilarAds(matches);
       console.log('Found similar ads:', matches);
+
+      // Fill in template variables
+      const filledTemplate = template
+        .replace('{style}', styleTemplate.description)
+        .replace('{callToAction}', adType === 'lead-gen' ? 'Sign up now' : 'Buy now')
+        .replace('{targetMarket}', selectedAvatar.description)
+        .replace('{specificFeatures}', selectedProduct?.description || '')
+        .replace('{painPoints}', selectedAvatar.painPoints.join('\n'))
+        .replace('{benefits}', selectedAvatar.motivations.join('\n'))
+        .replace('{productDescription}', selectedProduct?.description || '')
+        .replace('{theStory}', styleTemplate.guidelines)
+        .replace('{listBenefits}', selectedAvatar.psychographics.values.join('\n'))
+        .replace('{specificTerms}', selectedProduct?.category || '')
+        .replace('{studiesAndResearch}', '')
+        .replace('{credibleAuthority}', '')
+        .replace('{pressInfo}', '')
+        .replace('{numberOfReviews}', '100')
+        .replace('{averageStarRating}', '4.8')
+        .replace('{fiveStarText}', '"Amazing product that changed my life!"');
 
       // Use similar ads as examples for GPT to generate new ad
       const prompt = {
-        style: selectedStyle,
-        type: adType,
+        systemPrompt: promptTemplate.basePrompt.replace('{adType}', adType),
+        style: {
+          name: selectedStyle,
+          description: styleTemplate.description,
+          guidelines: styleTemplate.guidelines
+        },
+        template: filledTemplate,
         avatar: {
           description: selectedAvatar.description,
           demographics: selectedAvatar.demographics,
           painPoints: selectedAvatar.painPoints,
           motivations: selectedAvatar.motivations,
-          buyingBehavior: selectedAvatar.buyingBehavior
+          buyingBehavior: selectedAvatar.buyingBehavior,
+          psychographics: selectedAvatar.psychographics
         },
         product: selectedProduct,
-        examples: matches.map((match: any) => ({
-          headline: match.content.adContent?.headline,
-          primaryText: match.content.adContent?.primaryText,
-          description: match.content.adContent?.description,
-          metrics: match.metrics
+        examples: matches.map((match: PineconeMatch) => ({
+          headline: match.metadata.headline,
+          primaryText: match.metadata.primaryText,
+          description: match.metadata.description,
+          metrics: {
+            clickThroughRate: match.metadata.clickThroughRate,
+            conversionRate: match.metadata.conversionRate
+          }
         }))
       };
 
@@ -210,11 +255,31 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
           messages: [
             {
               role: 'system',
-              content: `You are an expert Facebook ad copywriter. Generate a new ad using the provided customer avatar data, product information, and successful ad examples. The ad should match the specified style and type.`
+              content: prompt.systemPrompt
             },
             {
               role: 'user',
-              content: JSON.stringify(prompt)
+              content: `Generate a high-converting Facebook ad using this template and information:
+
+Template:
+${prompt.template}
+
+Style Guidelines:
+${prompt.style.guidelines}
+
+Customer Avatar:
+${JSON.stringify(prompt.avatar, null, 2)}
+
+Product:
+${JSON.stringify(prompt.product, null, 2)}
+
+Similar Successful Ads:
+${JSON.stringify(prompt.examples, null, 2)}
+
+Generate the ad in this format:
+Headline: [attention-grabbing headline]
+Primary Text: [compelling main ad copy]
+Description: [supporting description/call to action]`
             }
           ]
         })
@@ -270,29 +335,6 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
       console.log('Generation process completed');
     }
   };
-
-  // Update similar ads when search query changes
-  useEffect(() => {
-    if (searchQuery || selectedAvatar) {
-      const searchText = [
-        searchQuery,
-        selectedAvatar?.description,
-        selectedAvatar?.painPoints.join(' '),
-        selectedAvatar?.motivations.join(' ')
-      ].filter(Boolean).join(' ');
-      
-      if (searchText) {
-        searchSimilarAds(searchText);
-      }
-    }
-  }, [searchQuery, selectedAvatar]);
-
-  // Update product when props change
-  useEffect(() => {
-    if (product) {
-      setSelectedProduct(product);
-    }
-  }, [product]);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
@@ -547,19 +589,19 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
                 <div key={ad.id} className="bg-[#2A2B2F] rounded-xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-purple-400">
-                      {ad.content.adContent?.type === 'lead-gen' ? 'Lead Generation' : 'Conversion'}
+                      {ad.metadata.type === 'lead-gen' ? 'Lead Generation' : 'Conversion'}
                     </span>
-                    <span className="text-xs text-gray-400">{ad.content.adContent?.style}</span>
+                    <span className="text-xs text-gray-400">{ad.metadata.style}</span>
                   </div>
                   <h3 className="font-medium text-white mb-2 line-clamp-2">
-                    {ad.content.adContent?.headline}
+                    {ad.metadata.headline}
                   </h3>
                   <p className="text-sm text-gray-400 mb-2 line-clamp-3">
-                    {ad.content.adContent?.primaryText}
+                    {ad.metadata.primaryText}
                   </p>
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>CTR: {(ad.metrics.clickThroughRate * 100).toFixed(2)}%</span>
-                    <span>Conv: {(ad.metrics.conversionRate * 100).toFixed(2)}%</span>
+                    <span>CTR: {(ad.metadata.clickThroughRate * 100).toFixed(2)}%</span>
+                    <span>Conv: {(ad.metadata.conversionRate * 100).toFixed(2)}%</span>
                   </div>
                 </div>
               ))}

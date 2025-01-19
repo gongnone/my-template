@@ -10,21 +10,19 @@ export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
+    const { messages } = await req.json();
 
-    // Ask OpenAI for a chat completion given the prompt
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json(
+        { error: 'Messages array is required' },
+        { status: 400 }
+      );
+    }
+
+    // Ask OpenAI for a chat completion given the messages
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert Facebook ad copywriter. Generate ad copy in the exact format specified, keeping the labels "Headline:", "Primary Text:", and "Description:" on their own lines.'
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
+      messages,
       temperature: 0.7,
       max_tokens: 3000,
     });
