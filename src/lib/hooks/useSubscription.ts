@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebase';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'none';
 
