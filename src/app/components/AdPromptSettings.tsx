@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLocalStorage } from '@/lib/hooks/useLocalStorage';
+import AdDatabaseSeeder from './AdDatabaseSeeder';
 
 interface StyleTemplate {
   description: string;
@@ -146,7 +147,7 @@ export default function AdPromptSettings() {
     'ad-prompt-template',
     defaultPromptTemplate
   );
-  const [activeTab, setActiveTab] = useState<'base' | 'lead-gen' | 'conversion' | 'styles'>('base');
+  const [activeTab, setActiveTab] = useState<'base' | 'lead-gen' | 'conversion' | 'styles' | 'database'>('base');
   const [selectedStyle, setSelectedStyle] = useState<string>(() => {
     // Initialize with the first available style
     const styles = Object.keys(defaultPromptTemplate.styleTemplates);
@@ -232,7 +233,7 @@ export default function AdPromptSettings() {
 
       {/* Tabs */}
       <div className="flex space-x-2 border-b border-gray-700">
-        {(['base', 'lead-gen', 'conversion', 'styles'] as const).map((tab) => (
+        {(['base', 'lead-gen', 'conversion', 'styles', 'database'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -242,7 +243,7 @@ export default function AdPromptSettings() {
                 : 'text-gray-400 hover:text-white hover:border-b-2 hover:border-gray-400'
             }`}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
+            {tab === 'database' ? 'Ad Database' : tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
           </button>
         ))}
       </div>
@@ -274,6 +275,12 @@ export default function AdPromptSettings() {
             'Conversion Template',
             'Enter the conversion template...'
           )
+        )}
+
+        {activeTab === 'database' && (
+          <div className="bg-[#1F2023] rounded-xl p-6">
+            <AdDatabaseSeeder />
+          </div>
         )}
 
         {activeTab === 'styles' && (
