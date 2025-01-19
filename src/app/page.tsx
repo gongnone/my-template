@@ -4,7 +4,7 @@ import { useState } from 'react';
 import SignInWithGoogle from '@/components/SignInWithGoogle';
 import FacebookAdGenerator from '@/app/components/FacebookAdGenerator';
 import { Product } from '@/lib/types/product';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 

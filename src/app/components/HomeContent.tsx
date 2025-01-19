@@ -2,7 +2,7 @@
 
 import Pricing from '@/app/components/Pricing';
 import SignInWithGoogle from '@/components/SignInWithGoogle';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export default function HomeContent() {
   const { user } = useAuth();

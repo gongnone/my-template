@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useDeepgram } from '@/lib/contexts/DeepgramContext';
 import { addDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebase';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import Link from 'next/link';
 

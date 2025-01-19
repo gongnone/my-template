@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Product } from '@/lib/types/product';
 import Link from 'next/link';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useProducts } from '@/lib/contexts/ProductContext';
 import { getRandomSampleProduct } from '@/lib/utils/sampleProducts';
 

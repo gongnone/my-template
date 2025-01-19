@@ -80,25 +80,43 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
   // Function to search similar ads using vector similarity
   const searchSimilarAds = async (searchContext: string) => {
     try {
+      console.log('Getting embeddings for search context:', searchContext);
       const queryEmbedding = await getEmbeddings(searchContext);
       
+      console.log('Querying Pinecone for similar ads...');
       const response = await fetch('/api/pinecone/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           vector: queryEmbedding,
-          topK: 5,
-          namespace: 'ad-database'
+          topK: 5
+          // Removed namespace to search all ads
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to search similar ads');
+      if (!response.ok) {
+        console.error('Pinecone query failed:', await response.text());
+        throw new Error('Failed to search similar ads');
+      }
       
       const results = await response.json();
-      return results.matches;
+      console.log('Pinecone query results:', {
+        matchCount: results.matches?.length || 0,
+        firstMatch: results.matches?.[0] ? {
+          score: results.matches[0].score,
+          metadata: results.matches[0].metadata
+        } : null
+      });
+
+      if (!results.matches?.length) {
+        console.warn('No similar ads found in Pinecone');
+      }
+
+      return results.matches || [];
     } catch (error) {
       console.error('Error searching similar ads:', error);
-      throw error;
+      // Return empty array instead of throwing to allow generation to continue
+      return [];
     }
   };
 
@@ -220,6 +238,26 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
         .replace('{fiveStarText}', '"Amazing product that changed my life!"');
 
       // Use similar ads as examples for GPT to generate new ad
+      console.log('Processing similar ads for prompt:', matches.length, 'matches found');
+
+      const examples = matches.map((match: PineconeMatch) => ({
+        headline: match.metadata.headline,
+        primaryText: match.metadata.primaryText,
+        description: match.metadata.description,
+        metrics: {
+          clickThroughRate: match.metadata.clickThroughRate,
+          conversionRate: match.metadata.conversionRate
+        }
+      }));
+
+      console.log('Processed examples:', {
+        count: examples.length,
+        firstExample: examples[0] ? {
+          headline: examples[0].headline,
+          metrics: examples[0].metrics
+        } : null
+      });
+
       const prompt = {
         systemPrompt: promptTemplate.basePrompt.replace('{adType}', adType),
         style: {
@@ -237,27 +275,20 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
           psychographics: selectedAvatar.psychographics
         },
         product: selectedProduct,
-        examples: matches.map((match: PineconeMatch) => ({
-          headline: match.metadata.headline,
-          primaryText: match.metadata.primaryText,
-          description: match.metadata.description,
-          metrics: {
-            clickThroughRate: match.metadata.clickThroughRate,
-            conversionRate: match.metadata.conversionRate
-          }
-        }))
+        examples
       };
 
       // Call OpenAI to generate new ad
-      console.log('Calling OpenAI to generate new ad');
-      const openaiResponse = await fetch('/api/openai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert Facebook ad copywriter. Follow these STRICT formatting rules:
+      console.log('Calling OpenAI to generate new ad with prompt:', {
+        hasExamples: examples.length > 0,
+        exampleCount: examples.length,
+        promptKeys: Object.keys(prompt)
+      });
+
+      const messages = [
+        {
+          role: 'system',
+          content: `You are an expert Facebook ad copywriter. Follow these STRICT formatting rules:
 
 1. Headline (CRITICAL):
    - MUST be 40 characters or less
@@ -282,11 +313,17 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
    - No special characters like [], {}, or \\n
    - No formatting markers
 
+5. Similar Ads Usage:
+   - Use the provided similar ads as inspiration
+   - Learn from their structure and style
+   - Adapt successful patterns while maintaining originality
+   - Consider their performance metrics
+
 I will reject any response that doesn't meet these requirements, especially the headline length limit.`
-            },
-            {
-              role: 'user',
-              content: `Generate a high-converting Facebook ad using this template and information:
+        },
+        {
+          role: 'user',
+          content: `Generate a high-converting Facebook ad using this template and information:
 
 Template:
 ${prompt.template}
@@ -300,8 +337,8 @@ ${JSON.stringify(prompt.avatar, null, 2)}
 Product:
 ${JSON.stringify(prompt.product, null, 2)}
 
-Similar Successful Ads:
-${JSON.stringify(prompt.examples, null, 2)}
+Similar Successful Ads (Use these as examples):
+${JSON.stringify(examples, null, 2)}
 
 Format the response EXACTLY like this, with blank lines between sections:
 
@@ -310,9 +347,13 @@ Headline: [MUST be 40 chars or less]
 Primary Text: [150-1900 chars of compelling copy]
 
 Description: [100 chars or less call to action]`
-            }
-          ]
-        })
+        }
+      ];
+
+      const openaiResponse = await fetch('/api/openai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
       });
 
       if (!openaiResponse.ok) throw new Error('Failed to generate ad');

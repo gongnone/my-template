@@ -1,7 +1,7 @@
 'use client';
 
 import AdDatabaseSeeder from '@/app/components/AdDatabaseSeeder';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
