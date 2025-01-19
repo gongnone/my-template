@@ -5,6 +5,7 @@ import CustomerAvatarForm from '@/app/components/CustomerAvatarForm';
 
 interface CustomerAvatar {
   id: string;
+  title: string;
   mainProblem: string;
   currentFrustrations: string;
   urgencyLevel: string;
@@ -60,12 +61,13 @@ export default function CustomerAvatarsPage() {
             >
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-medium mb-1">
-                    {avatar.ageRange} • {avatar.location}
+                  <h3 className="text-xl font-semibold mb-2 text-purple-400">
+                    {avatar.title}
                   </h3>
-                  <p className="text-sm text-gray-400">
-                    Created {new Date(avatar.createdAt).toLocaleDateString()}
-                  </p>
+                  <div className="text-sm text-gray-400 space-y-1">
+                    <p>{avatar.ageRange} • {avatar.location}</p>
+                    <p>Created {new Date(avatar.createdAt).toLocaleDateString()}</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => handleDelete(avatar.id)}

@@ -3,6 +3,9 @@
 import { useState } from 'react';
 
 interface CustomerAvatar {
+  // Identifier
+  title: string;
+
   // Pain Points
   mainProblem: string;
   currentFrustrations: string;
@@ -27,6 +30,7 @@ interface CustomerAvatar {
 
 export default function CustomerAvatarForm() {
   const [formData, setFormData] = useState<CustomerAvatar>({
+    title: '',
     mainProblem: '',
     currentFrustrations: '',
     urgencyLevel: 'medium',
@@ -41,6 +45,52 @@ export default function CustomerAvatarForm() {
     preferredContentFormat: 'mixed',
     peakEngagementTime: '',
   });
+
+  const [description, setDescription] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleQuickFill = async () => {
+    if (!description.trim()) {
+      alert('Please enter a description first');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/openai/generate-avatar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response format');
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        ...data,
+        // Ensure urgencyLevel and preferredContentFormat are valid enum values
+        urgencyLevel: ['low', 'medium', 'high'].includes(data.urgencyLevel) ? data.urgencyLevel : prev.urgencyLevel,
+        preferredContentFormat: ['video', 'text', 'images', 'mixed'].includes(data.preferredContentFormat) 
+          ? data.preferredContentFormat 
+          : prev.preferredContentFormat,
+      }));
+    } catch (error) {
+      console.error('Error generating avatar:', error);
+      alert(error instanceof Error ? error.message : 'Failed to generate avatar. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +122,51 @@ export default function CustomerAvatarForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Quick Fill Section */}
+      <div className="bg-[#1F2023] rounded-xl p-6">
+        <h3 className="text-lg font-medium mb-4">Quick Fill with AI</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Describe your target customer
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white min-h-[100px]"
+              placeholder="Example: A busy working mom in her 30s who wants to start a side business but struggles with time management..."
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleQuickFill}
+            disabled={isGenerating}
+            className="w-full bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? 'Generating...' : 'Generate Avatar Details'}
+          </button>
+        </div>
+      </div>
+
+      {/* Avatar Title Section */}
+      <div className="bg-[#1F2023] rounded-xl p-6">
+        <h3 className="text-lg font-medium mb-4">Avatar Title</h3>
+        <div>
+          <label className="block text-sm font-medium mb-2">
+            Give this avatar a memorable title*
+          </label>
+          <input
+            type="text"
+            name="title"
+            value={formData.title}
+            onChange={handleInputChange}
+            className="w-full bg-[#2A2B2F] rounded-lg p-3 text-white"
+            required
+            placeholder="e.g., Tech-Savvy Working Mom, Ambitious Young Professional..."
+          />
+        </div>
+      </div>
+
       {/* Pain Points Section */}
       <div className="bg-[#1F2023] rounded-xl p-6">
         <h3 className="text-lg font-medium mb-4">Primary Pain Points</h3>
