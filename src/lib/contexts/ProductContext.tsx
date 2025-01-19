@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Product } from '../types/product';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from './AuthContext';
 import { getUserProducts, createProduct, updateProduct, deleteProduct } from '../firebase/productUtils';
 
 interface ProductContextType {
