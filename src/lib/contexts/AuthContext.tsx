@@ -12,7 +12,7 @@ import {
 } from "firebase/auth";
 import { app } from "@/lib/firebase/firebase";
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
@@ -20,7 +20,7 @@ interface AuthContextType {
 }
 
 // Create context with a default value
-const AuthContext = createContext<AuthContextType>({
+export const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
