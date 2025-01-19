@@ -4,14 +4,16 @@ import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/lib/hooks/useLocalStorage';
 import { defaultPromptTemplate } from './AdPromptSettings';
 import type { AdCreative, AdMetrics, VectorizedAd, AdContent } from '@/lib/types/ads';
+import type { CustomerAvatar } from '@/lib/types/customerAvatars';
 
 interface VectorAdGeneratorProps {
   product?: any;
   products?: any[];
+  customerAvatars?: CustomerAvatar[];
   onBack?: () => void;
 }
 
-export default function VectorAdGenerator({ product, products = [], onBack }: VectorAdGeneratorProps) {
+export default function VectorAdGenerator({ product, products = [], customerAvatars = [], onBack }: VectorAdGeneratorProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedAds, setGeneratedAds] = useState<AdCreative[]>([]);
@@ -21,6 +23,7 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
   const [searchQuery, setSearchQuery] = useState('');
   const [similarAds, setSimilarAds] = useState<VectorizedAd[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(product);
+  const [selectedAvatar, setSelectedAvatar] = useState<CustomerAvatar | null>(null);
   
   // Add new state variables for ad content
   const [primaryText, setPrimaryText] = useState('');
@@ -140,109 +143,127 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
       console.log('Starting ad generation process...');
 
       // Validate required fields
-      if (!selectedStyle || !adType || !primaryText || !headline || !description) {
-        throw new Error('Please fill in all required fields');
+      if (!selectedStyle || !adType || !selectedAvatar) {
+        throw new Error('Please select a style, ad type, and customer avatar');
       }
       console.log('Form validation passed');
 
-      // Create the new ad object
+      // Create search context from avatar and product
+      const searchContext = [
+        selectedAvatar.description,
+        ...selectedAvatar.painPoints,
+        ...selectedAvatar.motivations,
+        selectedProduct?.description || '',
+        selectedStyle,
+        adType
+      ].filter(Boolean).join(' ');
+
+      // Get embeddings for search context
+      console.log('Getting embeddings for search context');
+      const embeddings = await getEmbeddings(searchContext);
+
+      // Search for similar ads
+      console.log('Searching for similar ads');
+      const response = await fetch('/api/pinecone/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vector: embeddings,
+          topK: 3,
+          namespace: 'kkadtool'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to search similar ads');
+      }
+
+      const { matches } = await response.json();
+      console.log('Found similar ads:', matches);
+
+      // Use similar ads as examples for GPT to generate new ad
+      const prompt = {
+        style: selectedStyle,
+        type: adType,
+        avatar: {
+          description: selectedAvatar.description,
+          demographics: selectedAvatar.demographics,
+          painPoints: selectedAvatar.painPoints,
+          motivations: selectedAvatar.motivations,
+          buyingBehavior: selectedAvatar.buyingBehavior
+        },
+        product: selectedProduct,
+        examples: matches.map((match: any) => ({
+          headline: match.content.adContent?.headline,
+          primaryText: match.content.adContent?.primaryText,
+          description: match.content.adContent?.description,
+          metrics: match.metrics
+        }))
+      };
+
+      // Call OpenAI to generate new ad
+      console.log('Calling OpenAI to generate new ad');
+      const openaiResponse = await fetch('/api/openai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert Facebook ad copywriter. Generate a new ad using the provided customer avatar data, product information, and successful ad examples. The ad should match the specified style and type.`
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(prompt)
+            }
+          ]
+        })
+      });
+
+      if (!openaiResponse.ok) {
+        throw new Error('Failed to generate ad copy');
+      }
+
+      const generatedText = await openaiResponse.text();
+      console.log('Generated text:', generatedText);
+
+      // Parse the generated text into ad components
+      const parsedAd = parseGeneratedAd(generatedText);
+      
+      // Create new ad object
       const newAd: AdCreative = {
         id: Date.now().toString(),
-        name: headline || 'Generated Ad',
-        description: description || '',
+        name: parsedAd.headline || 'Generated Ad',
+        description: parsedAd.description || '',
         category: 'text',
         adContent: {
           style: selectedStyle,
           type: adType,
-          primaryText: primaryText || '',
-          headline: headline || '',
-          description: description || '',
+          primaryText: parsedAd.primaryText || '',
+          headline: parsedAd.headline || '',
+          description: parsedAd.description || '',
           industry: selectedProduct?.category || '',
+          tags: selectedAvatar ? [
+            ...selectedAvatar.demographics.ageRange.split('-'),
+            selectedAvatar.demographics.gender,
+            ...selectedAvatar.psychographics.interests,
+            ...selectedAvatar.buyingBehavior.preferredChannels
+          ] : []
         },
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
-      console.log('Created new ad object:', newAd);
 
-      // Get embeddings for the ad content
-      try {
-        const adContent = newAd.adContent;
-        if (!adContent) {
-          throw new Error('Ad content is missing');
-        }
-        console.log('Requesting embeddings for text:', `${adContent.headline} ${adContent.primaryText} ${adContent.description}`);
-        
-        const embeddingResponse = await fetch('/api/openai/embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: `${adContent.headline} ${adContent.primaryText} ${adContent.description}`
-          })
-        });
-
-        if (!embeddingResponse.ok) {
-          const errorText = await embeddingResponse.text();
-          console.error('Embeddings API error response:', errorText);
-          throw new Error(`Failed to generate embeddings: ${errorText}`);
-        }
-
-        const embedData = await embeddingResponse.json();
-        console.log('Received embeddings response:', embedData);
-
-        if (!embedData.embeddings) {
-          console.error('Invalid embeddings response:', embedData);
-          throw new Error('Embeddings data is missing from response');
-        }
-
-        // Save to Pinecone
-        console.log('Preparing Pinecone request with embeddings');
-        const storeResponse = await fetch('/api/pinecone/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vectors: [{
-              id: newAd.id,
-              values: embedData.embeddings,
-              metadata: {
-                content: newAd,
-                metrics: {
-                  clickThroughRate: 0,
-                  conversionRate: 0,
-                  engagement: 0,
-                  impressions: 0
-                }
-              }
-            }],
-            namespace: 'kkadtool'
-          })
-        });
-
-        if (!storeResponse.ok) {
-          const errorData = await storeResponse.text();
-          console.error('Pinecone API error response:', errorData);
-          throw new Error(`Failed to save ad to database: ${errorData}`);
-        }
-
-        const storeData = await storeResponse.json();
-        console.log('Pinecone store response:', storeData);
-
-        setGeneratedAds(prev => [newAd, ...prev]);
-        setError(null);
-        console.log('Ad saved successfully');
-
-      } catch (error: unknown) {
-        console.error('Detailed error saving ad:', error);
-        if (error instanceof Error) {
-          console.error('Error stack:', error.stack);
-        }
-        setError(error instanceof Error ? error.message : 'Failed to save ad');
-      }
+      // Update state with new ad
+      setGeneratedAds(prev => [newAd, ...prev]);
+      setPrimaryText(parsedAd.primaryText);
+      setHeadline(parsedAd.headline);
+      setDescription(parsedAd.description);
+      setError(null);
+      console.log('Ad generated successfully');
 
     } catch (error) {
-      console.error('Top level error:', error);
-      if (error instanceof Error) {
-        console.error('Error stack:', error.stack);
-      }
+      console.error('Error generating ad:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate ad');
     } finally {
       setIsLoading(false);
@@ -252,10 +273,19 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
 
   // Update similar ads when search query changes
   useEffect(() => {
-    if (searchQuery) {
-      searchSimilarAds(searchQuery);
+    if (searchQuery || selectedAvatar) {
+      const searchText = [
+        searchQuery,
+        selectedAvatar?.description,
+        selectedAvatar?.painPoints.join(' '),
+        selectedAvatar?.motivations.join(' ')
+      ].filter(Boolean).join(' ');
+      
+      if (searchText) {
+        searchSimilarAds(searchText);
+      }
     }
-  }, [searchQuery]);
+  }, [searchQuery, selectedAvatar]);
 
   // Update product when props change
   useEffect(() => {
@@ -280,6 +310,91 @@ export default function VectorAdGenerator({ product, products = [], onBack }: Ve
 
       {/* Main Form Section */}
       <div className="bg-[#1A1B1E] rounded-xl p-8">
+        {/* Customer Avatar Selection */}
+        <div className="mb-8">
+          <label className="block text-xl font-semibold text-white mb-2">Customer Avatar*</label>
+          <div className="relative">
+            <select
+              value={selectedAvatar?.id || ''}
+              onChange={(e) => {
+                const avatar = customerAvatars.find(a => a.id === e.target.value);
+                setSelectedAvatar(avatar || null);
+                if (avatar) {
+                  setSearchQuery(avatar.description);
+                }
+              }}
+              className="w-full bg-[#2A2B2F] rounded-xl p-4 text-white appearance-none cursor-pointer text-lg"
+              required
+            >
+              <option value="">Select a Customer Avatar</option>
+              {customerAvatars.map((avatar) => (
+                <option key={avatar.id} value={avatar.id}>
+                  {avatar.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
+              <svg 
+                className="h-6 w-6 fill-current" 
+                xmlns="http://www.w3.org/2000/svg" 
+                viewBox="0 0 20 20"
+              >
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Avatar Details Panel */}
+        {selectedAvatar && (
+          <div className="mb-8 bg-[#2A2B2F] rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">{selectedAvatar.name} Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Demographics */}
+              <div>
+                <h4 className="text-purple-400 font-medium mb-2">Demographics</h4>
+                <ul className="space-y-2 text-gray-300">
+                  <li>Age: {selectedAvatar.demographics.ageRange}</li>
+                  <li>Gender: {selectedAvatar.demographics.gender}</li>
+                  <li>Location: {selectedAvatar.demographics.location}</li>
+                  <li>Occupation: {selectedAvatar.demographics.occupation}</li>
+                </ul>
+              </div>
+
+              {/* Psychographics */}
+              <div>
+                <h4 className="text-purple-400 font-medium mb-2">Interests & Values</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedAvatar.psychographics.interests.map((interest, index) => (
+                    <span key={index} className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                      {interest}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pain Points */}
+              <div>
+                <h4 className="text-purple-400 font-medium mb-2">Pain Points</h4>
+                <ul className="list-disc list-inside text-gray-300 space-y-1">
+                  {selectedAvatar.painPoints.map((point, index) => (
+                    <li key={index}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Buying Behavior */}
+              <div>
+                <h4 className="text-purple-400 font-medium mb-2">Buying Behavior</h4>
+                <ul className="space-y-2 text-gray-300">
+                  <li>Price Preference: {selectedAvatar.buyingBehavior.pricePreference}</li>
+                  <li>Channels: {selectedAvatar.buyingBehavior.preferredChannels.join(', ')}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Product Selection */}
         <div className="mb-8">
           <label className="block text-xl font-semibold text-white mb-2">Product*</label>

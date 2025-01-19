@@ -5,6 +5,7 @@ import { useProducts } from '@/lib/contexts/ProductContext';
 import FacebookAdGenerator from '@/app/components/FacebookAdGenerator';
 import VectorAdGenerator from '@/app/components/VectorAdGenerator';
 import { Product } from '@/lib/types/product';
+import { customerAvatars } from '@/lib/data/customerAvatars';
 
 export default function FacebookAdsPage() {
   const { products } = useProducts();
@@ -75,6 +76,7 @@ export default function FacebookAdsPage() {
         <VectorAdGenerator
           product={selectedProduct}
           products={products}
+          customerAvatars={customerAvatars}
           onBack={() => setSelectedProduct(null)}
         />
       )}
