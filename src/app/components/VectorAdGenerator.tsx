@@ -104,60 +104,61 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
 
   // Function to parse the generated text into ad components
   const parseGeneratedAd = (text: string) => {
-    console.log('Parsing text:', text); // Debug log
+    console.log('Parsing text:', text);
     
-    const headlines: string[] = [];
-    const primaryTexts: string[] = [];
-    const descriptions: string[] = [];
+    // First, split by \n\n to handle section markers
+    const sections = text.split(/\n\n+/);
     
-    const lines = text.split('\n');
-    let currentSection = '';
+    let headline = '';
+    let primaryText = '';
+    let description = '';
     
-    for (const line of lines) {
-      const lowerLine = line.toLowerCase();
-      console.log('Processing line:', line); // Debug log
-      
-      if (lowerLine.includes('headline:')) {
-        currentSection = 'headline';
-        const content = line.split(/headline:\s*/i)[1];
-        if (content) headlines.push(content.trim());
-      } else if (lowerLine.includes('primary text:')) {
-        currentSection = 'primaryText';
-        const content = line.split(/primary text:\s*/i)[1];
-        if (content) primaryTexts.push(content.trim());
-      } else if (lowerLine.includes('description:')) {
-        currentSection = 'description';
-        const content = line.split(/description:\s*/i)[1];
-        if (content) descriptions.push(content.trim());
-      } else if (line.trim() && currentSection) {
-        switch (currentSection) {
-          case 'headline':
-            if (headlines.length > 0) {
-              headlines[headlines.length - 1] += ' ' + line.trim();
-            }
-            break;
-          case 'primaryText':
-            if (primaryTexts.length > 0) {
-              primaryTexts[primaryTexts.length - 1] += ' ' + line.trim();
-            }
-            break;
-          case 'description':
-            if (descriptions.length > 0) {
-              descriptions[descriptions.length - 1] += ' ' + line.trim();
-            }
-            break;
-        }
+    // Process each section
+    sections.forEach(section => {
+      const cleanSection = section.trim();
+      if (cleanSection.toLowerCase().startsWith('headline:')) {
+        headline = cleanSection.replace(/^headline:\s*/i, '').trim();
       }
+      else if (cleanSection.toLowerCase().startsWith('primary text:')) {
+        primaryText = cleanSection.replace(/^primary text:\s*/i, '').trim();
+      }
+      else if (cleanSection.toLowerCase().startsWith('description:')) {
+        description = cleanSection.replace(/^description:\s*/i, '').trim();
+      }
+    });
+
+    // Clean up any remaining special characters or extra whitespace
+    headline = headline.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+    primaryText = primaryText.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+    description = description.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Remove any "[" or "]" characters and curly braces
+    headline = headline.replace(/[\[\]{}]/g, '');
+    primaryText = primaryText.replace(/[\[\]{}]/g, '');
+    description = description.replace(/[\[\]{}]/g, '');
+
+    // Validate content lengths
+    if (headline.length > 40) {
+      throw new Error(`Headline is too long (${headline.length} chars). Must be 40 chars or less.`);
+    }
+    if (primaryText.length < 150 || primaryText.length > 1900) {
+      throw new Error(`Primary text must be between 150 and 1900 chars (currently ${primaryText.length}).`);
+    }
+    if (description.length > 100) {
+      throw new Error(`Description is too long (${description.length} chars). Must be 100 chars or less.`);
     }
 
-    const result = {
-      headline: headlines[0] || '',
-      primaryText: primaryTexts[0] || '',
-      description: descriptions[0] || '',
-    };
+    console.log('Parsed result:', {
+      headline: `[${headline.length} chars] ${headline}`,
+      primaryText: `[${primaryText.length} chars] ${primaryText}`,
+      description: `[${description.length} chars] ${description}`
+    });
 
-    console.log('Parsed result:', result); // Debug log
-    return result;
+    return {
+      headline,
+      primaryText,
+      description
+    };
   };
 
   // Function to generate new ad using OpenAI
@@ -169,6 +170,7 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
 
       // Validate required fields
       if (!selectedStyle || !adType || !selectedAvatar) {
+        setIsLoading(false);
         throw new Error('Please select a style, ad type, and customer avatar');
       }
       console.log('Form validation passed');
@@ -255,7 +257,32 @@ export default function VectorAdGenerator({ product, products = [], customerAvat
           messages: [
             {
               role: 'system',
-              content: prompt.systemPrompt
+              content: `You are an expert Facebook ad copywriter. Follow these STRICT formatting rules:
+
+1. Headline (CRITICAL):
+   - MUST be 40 characters or less
+   - Attention-grabbing and clear
+   - No special characters or formatting
+   - Will be rejected if over 40 characters
+
+2. Primary Text:
+   - 150-1900 characters
+   - Detailed benefits and offer
+   - Compelling story and value proposition
+   - Can include multiple paragraphs
+
+3. Description:
+   - 100 characters or less
+   - Clear call to action
+   - Direct and actionable
+
+4. Format Requirements:
+   - Each section MUST start with section name and colon
+   - Sections MUST be separated by exactly one blank line
+   - No special characters like [], {}, or \\n
+   - No formatting markers
+
+I will reject any response that doesn't meet these requirements, especially the headline length limit.`
             },
             {
               role: 'user',
@@ -276,54 +303,62 @@ ${JSON.stringify(prompt.product, null, 2)}
 Similar Successful Ads:
 ${JSON.stringify(prompt.examples, null, 2)}
 
-Generate the ad in this format:
-Headline: [attention-grabbing headline]
-Primary Text: [compelling main ad copy]
-Description: [supporting description/call to action]`
+Format the response EXACTLY like this, with blank lines between sections:
+
+Headline: [MUST be 40 chars or less]
+
+Primary Text: [150-1900 chars of compelling copy]
+
+Description: [100 chars or less call to action]`
             }
           ]
         })
       });
 
-      if (!openaiResponse.ok) {
-        throw new Error('Failed to generate ad copy');
-      }
+      if (!openaiResponse.ok) throw new Error('Failed to generate ad');
 
-      const generatedText = await openaiResponse.text();
-      console.log('Generated text:', generatedText);
-
-      // Parse the generated text into ad components
-      const parsedAd = parseGeneratedAd(generatedText);
+      const data = await openaiResponse.json();
+      const parsedAd = parseGeneratedAd(data.text);
       
-      // Create new ad object
+      // Create new ad object with required adContent
+      const adContent: AdContent = {
+        style: selectedStyle,
+        type: adType,
+        primaryText: parsedAd.primaryText,
+        headline: parsedAd.headline,
+        description: parsedAd.description,
+        industry: selectedProduct?.category || '',
+        tags: selectedAvatar ? [
+          ...selectedAvatar.demographics.ageRange.split('-'),
+          selectedAvatar.demographics.gender,
+          ...selectedAvatar.psychographics.interests,
+          ...selectedAvatar.buyingBehavior.preferredChannels
+        ] : []
+      };
+
       const newAd: AdCreative = {
         id: Date.now().toString(),
         name: parsedAd.headline || 'Generated Ad',
         description: parsedAd.description || '',
         category: 'text',
-        adContent: {
-          style: selectedStyle,
-          type: adType,
-          primaryText: parsedAd.primaryText || '',
-          headline: parsedAd.headline || '',
-          description: parsedAd.description || '',
-          industry: selectedProduct?.category || '',
-          tags: selectedAvatar ? [
-            ...selectedAvatar.demographics.ageRange.split('-'),
-            selectedAvatar.demographics.gender,
-            ...selectedAvatar.psychographics.interests,
-            ...selectedAvatar.buyingBehavior.preferredChannels
-          ] : []
-        },
+        adContent,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
+      // Log the ad content for debugging
+      console.log('New ad content:', {
+        headline: adContent.headline,
+        primaryText: adContent.primaryText,
+        description: adContent.description
+      });
+
       // Update state with new ad
-      setGeneratedAds(prev => [newAd, ...prev]);
-      setPrimaryText(parsedAd.primaryText);
-      setHeadline(parsedAd.headline);
-      setDescription(parsedAd.description);
+      setGeneratedAds((prev: AdCreative[]) => [newAd, ...prev]);
+      setPrimaryText(adContent.primaryText);
+      setHeadline(adContent.headline);
+      setDescription(adContent.description);
+
       setError(null);
       console.log('Ad generated successfully');
 
@@ -612,10 +647,35 @@ Description: [supporting description/call to action]`
         {/* Generate Button */}
         <button
           onClick={generateAd}
-          disabled={isLoading || !selectedStyle}
-          className="w-full px-8 py-4 bg-purple-600 rounded-xl hover:bg-purple-700 text-white transition-colors disabled:opacity-50 text-lg font-medium"
+          disabled={isLoading || !selectedStyle || !adType || !selectedAvatar}
+          className={`px-4 py-2 rounded-lg font-medium ${
+            isLoading 
+              ? 'bg-purple-500/50 cursor-not-allowed' 
+              : 'bg-purple-500 hover:bg-purple-600'
+          } text-white transition-colors`}
         >
-          {isLoading ? 'Generating...' : 'Generate Ad'}
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle 
+                  className="opacity-25" 
+                  cx="12" 
+                  cy="12" 
+                  r="10" 
+                  stroke="currentColor" 
+                  strokeWidth="4"
+                />
+                <path 
+                  className="opacity-75" 
+                  fill="currentColor" 
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Generating...
+            </span>
+          ) : (
+            'Generate Ad'
+          )}
         </button>
       </div>
 
