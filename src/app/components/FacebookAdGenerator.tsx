@@ -70,15 +70,79 @@ export default function FacebookAdGenerator({ product, products = [], onBack }: 
     description: string;
   } | null>(null);
   const [showGeneratedView, setShowGeneratedView] = useState(false);
+  const [editedOutputs, setEditedOutputs] = useState<{
+    primaryText: string;
+    headline: string;
+    description: string;
+  } | null>(null);
 
   const { complete, completion, isLoading } = useCompletion({
     api: '/api/openai/chat',
+    onResponse: (response) => {
+      console.log('Streaming response started');
+    },
+    onFinish: (completion) => {
+      console.log('Final completion:', completion);
+      
+      try {
+        // Clean up the completion first
+        const cleanedCompletion = completion
+          .replace(/Format your response exactly like this:\s*\d\./i, '')
+          .replace(/Here's a \w+ Facebook ad:/i, '')
+          .trim();
+
+        // Try to parse sections using common patterns
+        const sections = {
+          primaryText: '',
+          headline: '',
+          description: ''
+        };
+
+        // First attempt: Try to find sections by their headers
+        const patterns = {
+          primaryText: /(?:Primary Text|1)[:.]?\s*([^]*?)(?=(?:Headline|2|Description|3|$))/i,
+          headline: /(?:Headline|2)[:.]?\s*([^]*?)(?=(?:Description|3|$))/i,
+          description: /(?:Description|3)[:.]?\s*([^]*?)(?=$)/i
+        };
+
+        Object.entries(patterns).forEach(([key, pattern]) => {
+          const match = cleanedCompletion.match(pattern);
+          if (match) {
+            sections[key as keyof typeof sections] = match[1]
+              .trim()
+              .replace(/\[.*?\]/g, '')
+              .replace(/Your (?:primary text|headline|description) here/gi, '')
+              .trim();
+          }
+        });
+
+        // Validate that we have content
+        if (!sections.primaryText && !sections.headline && !sections.description) {
+          // Fallback: Try splitting by numbers if no sections found
+          const numberSplit = cleanedCompletion.split(/\d\.\s+/);
+          if (numberSplit.length >= 4) {
+            [, sections.primaryText, sections.headline, sections.description] = numberSplit.map(s => s.trim());
+          }
+        }
+
+        // Final validation
+        if (sections.primaryText || sections.headline || sections.description) {
+          console.log('Parsed sections:', sections);
+          setAdOutputs(sections);
+          setEditedOutputs(sections);
+          setShowGeneratedView(true);
+        } else {
+          throw new Error('Could not parse the response format');
+        }
+      } catch (parseError) {
+        console.error('Error parsing completion:', parseError);
+        console.error('Raw completion:', completion);
+        alert('Error parsing the generated content. Please try again.');
+      }
+    },
     onError: (error) => {
       console.error('Completion error:', error);
       alert('Error generating ad. Please try again.');
-    },
-    onFinish: () => {
-      // Handle completion if needed
     },
   });
 
@@ -150,37 +214,12 @@ Please use these examples as inspiration for tone and structure while creating a
         templateExamples
       });
 
-      const response = await complete(prompt);
-      
-      if (response) {
-        console.log('API Response:', response);
-        
-        try {
-          const sections = response.split(/\d\.\s+/);
-          if (sections.length >= 4) {
-            const [_, primaryText, headline, description] = sections;
-            
-            setAdOutputs({
-              primaryText: primaryText.replace('Primary Text (2000 chars max):', '').trim(),
-              headline: headline.replace('Headline (255 chars max):', '').trim(),
-              description: description.replace('Description (150 chars max):', '').trim(),
-            });
-            setShowGeneratedView(true);
-          } else {
-            console.error('Invalid response format:', response);
-            alert('Error: Invalid response format from AI. Please try again.');
-          }
-        } catch (parseError) {
-          console.error('Error parsing response:', parseError);
-          alert('Error parsing the generated content. Please try again.');
-        }
-      } else {
-        console.error('No response from API');
-        alert('No response received. Please try again.');
-      }
+      console.log('Sending prompt:', prompt); // Debug log
+
+      await complete(prompt);
     } catch (error) {
       console.error('Error generating ad:', error);
-      alert('Error generating ad. Please try again.');
+      alert(error instanceof Error ? error.message : 'Error generating ad. Please try again.');
     }
   };
 
@@ -224,9 +263,67 @@ Please use these examples as inspiration for tone and structure while creating a
   const getTextLength = (text: string | undefined) => text?.length || 0;
 
   const GeneratedView = () => {
-    const [activeViewTab, setActiveViewTab] = useState<'ad-copy' | 'body-copy' | 'link-desc'>('ad-copy');
-    const [editedOutputs, setEditedOutputs] = useState(adOutputs);
+    const [activeViewTab, setActiveViewTab] = useState<'primary-text' | 'headline' | 'description'>('primary-text');
     
+    const handleRegenerate = async () => {
+      try {
+        let templateExamples = '';
+        try {
+          const styleExamples = getExamplesForStyle(adStyle, activeTab);
+          if (styleExamples?.examples.length) {
+            templateExamples = `
+Here are examples of successful ads in this style:
+${styleExamples.examples.map((example: { primaryText: string; headline: string; description: string }, i: number) => `
+Example ${i + 1}:
+Primary Text:
+${example.primaryText}
+
+Headline:
+${example.headline}
+
+Description:
+${example.description}
+`).join('\n')}
+
+Please use these examples as inspiration for tone and structure while creating a unique ad that matches this style.`;
+          }
+        } catch (error) {
+          console.log('No templates available for this style');
+        }
+
+        const prompt = generatePrompt({
+          adType: activeTab,
+          adStyle,
+          callToAction,
+          product: selectedProduct,
+          regularPrice,
+          salePrice,
+          discountPercentage,
+          offerDeadline,
+          bonusItems,
+          guarantee,
+          shipping,
+          templateExamples
+        });
+
+        console.log('Regenerating with prompt:', prompt);
+        
+        // Add a timestamp to ensure uniqueness
+        const uniquePrompt = `${prompt}\n\nGenerate a unique variation. Current timestamp: ${Date.now()}`;
+        await complete(uniquePrompt);
+      } catch (error) {
+        console.error('Error regenerating ad:', error);
+        alert(error instanceof Error ? error.message : 'Error regenerating ad. Please try again.');
+      }
+    };
+
+    // Map field names to their corresponding state keys
+    const fieldMappings = {
+      'primary-text': 'primaryText',
+      'headline': 'headline',
+      'description': 'description'
+    } as const;
+
     const handleTextChange = (
       field: 'primaryText' | 'headline' | 'description',
       value: string
@@ -235,6 +332,27 @@ Please use these examples as inspiration for tone and structure while creating a
         ...prev,
         [field]: value
       } : null);
+    };
+
+    const getFieldContent = (field: keyof typeof fieldMappings) => {
+      return editedOutputs?.[fieldMappings[field]] || '';
+    };
+
+    const getFieldLength = (field: keyof typeof fieldMappings) => {
+      return getFieldContent(field).length;
+    };
+
+    const getMaxLength = (field: keyof typeof fieldMappings) => {
+      const maxLengths = {
+        'primary-text': 2000,
+        'headline': 255,
+        'description': 150
+      };
+      return maxLengths[field];
+    };
+
+    const handleCopy = (field: keyof typeof fieldMappings) => {
+      navigator.clipboard.writeText(getFieldContent(field));
     };
 
     const handleSaveToCreatives = async () => {
@@ -270,6 +388,43 @@ Please use these examples as inspiration for tone and structure while creating a
       }
     };
 
+    const renderField = (field: keyof typeof fieldMappings) => {
+      const maxLength = getMaxLength(field);
+      const currentLength = getFieldLength(field);
+      const content = getFieldContent(field);
+      const title = field.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      const isLongText = field === 'primary-text';
+
+      return (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-lg font-medium">{title}</h3>
+            <div className="flex items-center gap-4">
+              <span className={`text-sm ${
+                currentLength > maxLength ? 'text-red-500' : 'text-gray-400'
+              }`}>
+                {currentLength}/{maxLength}
+              </span>
+              <button
+                onClick={() => handleCopy(field)}
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+          <textarea
+            className={`w-full bg-[#2A2B2F] p-4 rounded-lg text-white ${
+              isLongText ? 'min-h-[200px] resize-y whitespace-pre-wrap' : 'resize-none'
+            }`}
+            value={content}
+            onChange={(e) => handleTextChange(fieldMappings[field], e.target.value)}
+            rows={isLongText ? undefined : 2}
+          />
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between mb-6">
@@ -282,11 +437,11 @@ Please use these examples as inspiration for tone and structure while creating a
               Edit Inputs
             </button>
             <button
-              onClick={handleSubmit}
+              onClick={handleRegenerate}
               className="px-4 py-2 bg-purple-600 rounded-lg text-sm hover:bg-purple-700 transition-colors"
               disabled={isLoading}
             >
-              Regenerate
+              {isLoading ? 'Regenerating...' : 'Regenerate'}
             </button>
             <button
               onClick={handleSaveToCreatives}
@@ -300,129 +455,25 @@ Please use these examples as inspiration for tone and structure while creating a
         {/* View Tabs */}
         <div className="flex justify-center w-full mb-6">
           <div className="inline-flex p-1 bg-[#2A2B2F] rounded-lg">
-            <button
-              onClick={() => setActiveViewTab('ad-copy')}
-              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
-                activeViewTab === 'ad-copy'
-                  ? 'bg-purple-600 text-white shadow-sm scale-105'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Ad Headlines
-            </button>
-            <button
-              onClick={() => setActiveViewTab('body-copy')}
-              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
-                activeViewTab === 'body-copy'
-                  ? 'bg-purple-600 text-white shadow-sm scale-105'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Body Copy
-            </button>
-            <button
-              onClick={() => setActiveViewTab('link-desc')}
-              className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
-                activeViewTab === 'link-desc'
-                  ? 'bg-purple-600 text-white shadow-sm scale-105'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Link Descriptions
-            </button>
+            {(['primary-text', 'headline', 'description'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveViewTab(tab)}
+                className={`px-6 py-2.5 rounded-md font-medium text-sm transition-all duration-200 ${
+                  activeViewTab === tab
+                    ? 'bg-purple-600 text-white shadow-sm scale-105'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {tab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="bg-[#1F2023] rounded-xl p-6">
           <div className="space-y-8">
-            {activeViewTab === 'ad-copy' && (
-              <>
-                {/* Primary Text Section */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-medium">Primary Text</h3>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-sm ${
-                        getTextLength(editedOutputs?.primaryText) > 2000 ? 'text-red-500' : 'text-gray-400'
-                      }`}>
-                        {getTextLength(editedOutputs?.primaryText)}/2000
-                      </span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(editedOutputs?.primaryText || '')}
-                        className="text-sm text-gray-400 hover:text-white"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    className="w-full bg-[#2A2B2F] p-4 rounded-lg whitespace-pre-wrap text-white min-h-[200px] resize-y"
-                    value={editedOutputs?.primaryText || ''}
-                    onChange={(e) => handleTextChange('primaryText', e.target.value)}
-                  />
-                </div>
-              </>
-            )}
-
-            {activeViewTab === 'body-copy' && (
-              <>
-                {/* Headline Section */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-medium">Headline</h3>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-sm ${
-                        getTextLength(editedOutputs?.headline) > 255 ? 'text-red-500' : 'text-gray-400'
-                      }`}>
-                        {getTextLength(editedOutputs?.headline)}/255
-                      </span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(editedOutputs?.headline || '')}
-                        className="text-sm text-gray-400 hover:text-white"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    className="w-full bg-[#2A2B2F] p-4 rounded-lg text-white resize-none"
-                    value={editedOutputs?.headline || ''}
-                    onChange={(e) => handleTextChange('headline', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-              </>
-            )}
-
-            {activeViewTab === 'link-desc' && (
-              <>
-                {/* Description Section */}
-                <div>
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-lg font-medium">Description</h3>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-sm ${
-                        getTextLength(editedOutputs?.description) > 150 ? 'text-red-500' : 'text-gray-400'
-                      }`}>
-                        {getTextLength(editedOutputs?.description)}/150
-                      </span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(editedOutputs?.description || '')}
-                        className="text-sm text-gray-400 hover:text-white"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                  <textarea
-                    className="w-full bg-[#2A2B2F] p-4 rounded-lg text-white resize-none"
-                    value={editedOutputs?.description || ''}
-                    onChange={(e) => handleTextChange('description', e.target.value)}
-                    rows={2}
-                  />
-                </div>
-              </>
-            )}
+            {renderField(activeViewTab)}
           </div>
         </div>
       </div>

@@ -18,6 +18,12 @@ const navigationItems = [
     href: '/dashboard/customer-avatars'
   },
   {
+    title: 'Branding',
+    description: 'Define your brand guidelines',
+    icon: '✨',
+    href: '/dashboard/branding'
+  },
+  {
     title: 'Ad Creatives',
     description: 'Ad Creatives for Facebook Ads',
     icon: '🎨',

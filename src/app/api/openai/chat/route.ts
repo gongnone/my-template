@@ -1,6 +1,5 @@
 import { OpenAIStream, StreamingTextResponse } from 'ai';
 import OpenAI from 'openai';
-import { NextResponse } from 'next/server';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -10,32 +9,42 @@ export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const { prompt } = await req.json();
 
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json(
-        { error: 'Messages array is required' },
-        { status: 400 }
-      );
+    if (!prompt) {
+      throw new Error('Prompt is required');
     }
 
-    // Ask OpenAI for a chat completion given the messages
+    // Create message array for the chat completion
+    const messages = [
+      {
+        role: 'system' as const,
+        content: 'You are a professional Facebook ad copywriter with expertise in creating high-converting ads. Each response should be unique and creative, never repeating previous outputs. Follow the provided format exactly.'
+      },
+      {
+        role: 'user' as const,
+        content: prompt
+      }
+    ];
+
+    // Create the stream
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4-turbo-preview',
       messages,
-      temperature: 0.7,
+      temperature: 0.9,
       max_tokens: 3000,
+      frequency_penalty: 0.5,
+      presence_penalty: 0.5,
+      stream: true,
     });
 
-    // Return the generated text directly instead of streaming
-    return NextResponse.json({
-      text: response.choices[0].message.content
-    });
+    // Convert the response into a friendly stream
+    const stream = OpenAIStream(response);
+
+    // Return a StreamingTextResponse, which can be consumed by the client
+    return new StreamingTextResponse(stream);
   } catch (error) {
     console.error('OpenAI API error:', error);
-    return NextResponse.json(
-      { error: 'Error generating response' }, 
-      { status: 500 }
-    );
+    throw error;
   }
 }
