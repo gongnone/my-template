@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Product } from '@/lib/types/product';
 import Link from 'next/link';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useProducts } from '@/lib/contexts/ProductContext';
 import { getRandomSampleProduct } from '@/lib/utils/sampleProducts';
 
@@ -215,7 +215,47 @@ function CreateProductModal({
     testimonials: initialData?.testimonials || ['']
   });
 
+  const [description, setDescription] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleQuickFill = async () => {
+    if (!description.trim()) {
+      alert('Please enter a description first');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const response = await fetch('/api/openai/generate-product', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ description }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response format');
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        ...data,
+      }));
+    } catch (error) {
+      console.error('Error generating product:', error);
+      alert(error instanceof Error ? error.message : 'Failed to generate product. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -301,6 +341,34 @@ function CreateProductModal({
             <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
           </div>
         </div>
+
+        {/* Quick Fill Section */}
+        {!initialData && (
+          <div className="bg-[#2A2B2F] rounded-xl p-6 mb-6">
+            <h3 className="text-lg font-medium mb-4">Quick Fill with AI</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Describe your product
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full bg-[#1F2023] rounded-lg p-3 text-white min-h-[100px]"
+                  placeholder="Example: A revolutionary AI-powered fitness app that creates personalized workout plans based on user's goals, fitness level, and available equipment..."
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickFill}
+                disabled={isGenerating}
+                className="w-full bg-purple-600 text-white font-medium py-3 px-4 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isGenerating ? 'Generating...' : 'Generate Product Details'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* Product Name/Title/Type */}
