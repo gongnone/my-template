@@ -1,7 +1,7 @@
 'use client';
 
 import { Product } from '@/lib/types/product';
-import { useState, useEffect, type ChangeEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, useRef } from 'react';
 import { useCompletion } from 'ai/react';
 import { useAdStyles } from '@/lib/hooks/useAdStyles';
 import { generatePrompt } from '@/lib/utils/promptGenerator';
@@ -262,8 +262,205 @@ Please use these examples as inspiration for tone and structure while creating a
 
   const getTextLength = (text: string | undefined) => text?.length || 0;
 
+  const ChatMessage = ({ role, content, fieldContent }: { 
+    role: 'user' | 'assistant'; 
+    content: string;
+    fieldContent?: string;
+  }) => (
+    <div className={`flex gap-3 ${role === 'assistant' ? 'justify-start' : 'justify-end'} mb-4`}>
+      <div className={`flex flex-col max-w-[85%] ${role === 'assistant' ? 'items-start' : 'items-end'}`}>
+        <div className={`rounded-2xl px-4 py-3 ${
+          role === 'assistant' 
+            ? 'bg-[#2A2B2F] text-white' 
+            : 'bg-purple-600 text-white'
+        }`}>
+          <div className="prose prose-invert max-w-none">
+            {content}
+          </div>
+        </div>
+        {fieldContent && (
+          <div className="mt-2 w-full">
+            <div className="bg-[#1A1B1F] border border-gray-800 rounded-xl p-4">
+              <pre className="whitespace-pre-wrap font-sans text-gray-300 text-sm">
+                {fieldContent}
+              </pre>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const ChatInterface = ({ 
+    currentContent,
+    onUpdateContent,
+    activeField,
+  }: { 
+    currentContent: { primaryText: string; headline: string; description: string } | null;
+    onUpdateContent: (field: 'primaryText' | 'headline' | 'description', content: string) => void;
+    activeField: 'primaryText' | 'headline' | 'description';
+  }) => {
+    const [messages, setMessages] = useState<Array<{
+      role: 'user' | 'assistant';
+      content: string;
+      fieldContent?: string;
+    }>>([]);
+    const [input, setInput] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
+    const chatRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    // Reset messages when active field changes
+    useEffect(() => {
+      setMessages([{
+        role: 'assistant',
+        content: `I'm here to help you improve the ${activeField.replace(/([A-Z])/g, ' $1').toLowerCase()}. Here's the current content:`,
+        fieldContent: currentContent?.[activeField] || ''
+      }]);
+    }, [activeField, currentContent]);
+
+    const handleSendMessage = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!input.trim() || !currentContent || isTyping) return;
+
+      // Add user message
+      const userMessage = { role: 'user' as const, content: input };
+      setMessages(prev => [...prev, userMessage]);
+      setInput('');
+      setIsTyping(true);
+
+      // Prepare the prompt with context
+      const prompt = `Given this Facebook ad ${activeField.replace(/([A-Z])/g, ' $1').toLowerCase()}:
+"${currentContent[activeField]}"
+
+User request: ${input}
+
+Please help modify ONLY the ${activeField.replace(/([A-Z])/g, ' $1').toLowerCase()}, keeping in mind the character limit of ${
+        activeField === 'primaryText' ? 2000 : activeField === 'headline' ? 255 : 150
+      } characters.
+
+Respond in this format:
+1. Your explanation of the changes
+2. The complete new text starting with "New content:"`;
+
+      try {
+        const response = await complete(prompt);
+        if (response) {
+          // Extract new content
+          const newContent = response.match(/New content:([\s\S]*?)$/i)?.[1]?.trim();
+          
+          if (newContent) {
+            // Add assistant message with both explanation and new content
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: response.split('New content:')[0].trim(),
+              fieldContent: newContent
+            }]);
+            
+            // Update only the active field
+            onUpdateContent(activeField, newContent);
+          } else {
+            // If no new content found, just show the response
+            setMessages(prev => [...prev, { 
+              role: 'assistant', 
+              content: response
+            }]);
+          }
+        }
+      } catch (error) {
+        console.error('Error processing chat message:', error);
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: 'Sorry, I encountered an error while processing your request. Please try again.' 
+        }]);
+      } finally {
+        setIsTyping(false);
+      }
+    };
+
+    // Auto-resize textarea
+    const handleTextareaResize = () => {
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        inputRef.current.style.height = inputRef.current.scrollHeight + 'px';
+      }
+    };
+
+    // Handle keyboard shortcuts
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage(e);
+      }
+    };
+
+    // Scroll to bottom when messages update
+    useEffect(() => {
+      if (chatRef.current) {
+        chatRef.current.scrollTop = chatRef.current.scrollHeight;
+      }
+    }, [messages]);
+
+    return (
+      <div className="flex flex-col h-[500px] bg-[#1F2023] rounded-xl border border-gray-800">
+        <div className="flex-none px-4 py-3 border-b border-gray-800">
+          <h3 className="text-lg font-medium text-white">
+            Editing {activeField.replace(/([A-Z])/g, ' $1').toLowerCase()}
+          </h3>
+        </div>
+        
+        <div ref={chatRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message, index) => (
+            <ChatMessage key={index} {...message} />
+          ))}
+          {isTyping && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-[#2A2B2F] text-white rounded-2xl px-4 py-3">
+                <div className="flex gap-2">
+                  <span className="animate-bounce">●</span>
+                  <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>●</span>
+                  <span className="animate-bounce" style={{ animationDelay: '0.4s' }}>●</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSendMessage} className="flex-none border-t border-gray-800 p-4">
+          <div className="flex gap-2 items-end">
+            <div className="flex-1 min-h-[44px] bg-[#2A2B2F] rounded-xl">
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  handleTextareaResize();
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={`Suggest changes for ${activeField.replace(/([A-Z])/g, ' $1').toLowerCase()}...`}
+                className="w-full bg-transparent text-white rounded-xl px-4 py-3 focus:outline-none resize-none"
+                style={{ maxHeight: '200px' }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!input.trim() || isTyping}
+              className="flex-none bg-purple-600 text-white p-3 rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   const GeneratedView = () => {
     const [activeViewTab, setActiveViewTab] = useState<'primary-text' | 'headline' | 'description'>('primary-text');
+    const [showChat, setShowChat] = useState(false);
     
     const handleRegenerate = async () => {
       try {
@@ -437,6 +634,16 @@ Please use these examples as inspiration for tone and structure while creating a
               Edit Inputs
             </button>
             <button
+              onClick={() => setShowChat(!showChat)}
+              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                showChat 
+                  ? 'bg-purple-600 text-white hover:bg-purple-700' 
+                  : 'bg-[#2A2B2F] text-gray-400 hover:bg-[#3A3B3F]'
+              }`}
+            >
+              {showChat ? 'Hide Chat' : 'Show Chat'}
+            </button>
+            <button
               onClick={handleRegenerate}
               className="px-4 py-2 bg-purple-600 rounded-lg text-sm hover:bg-purple-700 transition-colors"
               disabled={isLoading}
@@ -471,10 +678,20 @@ Please use these examples as inspiration for tone and structure while creating a
           </div>
         </div>
 
-        <div className="bg-[#1F2023] rounded-xl p-6">
-          <div className="space-y-8">
-            {renderField(activeViewTab)}
+        <div className="space-y-6">
+          <div className="bg-[#1F2023] rounded-xl p-6">
+            <div className="space-y-8">
+              {renderField(activeViewTab)}
+            </div>
           </div>
+
+          {showChat && (
+            <ChatInterface
+              currentContent={editedOutputs}
+              onUpdateContent={handleTextChange}
+              activeField={fieldMappings[activeViewTab]}
+            />
+          )}
         </div>
       </div>
     );
